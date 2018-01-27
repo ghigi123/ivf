@@ -2,9 +2,13 @@ import java.io.PrintWriter
 
 import scalax.collection.Graph
 import scalax.collection.GraphPredef._
-import scalax.collection.GraphEdge._
 import scalax.collection.io.dot._
+import scalax.collection.edge.LDiEdge
+
+import scalax.collection.edge.Implicits._
+
 import implicits._
+
 
 case class State(values: Map[String, Int]) {
   def get(key: String): Int = this.values(key)
@@ -70,16 +74,22 @@ case class AST_Skip() extends AST_Command
 case class AST_Assign(tVariable: AST_A_Variable, tValue: AST_A_Expression) extends AST_Command
 
 
-case class AST_B_BinaryExpression(tOperator: B_BinaryOperator, tExpressionA: AST_B_Expression, tExpressionB: AST_B_Expression) extends AST_B_Expression
+case class AST_B_BinaryExpression(tOperator: B_BinaryOperator,
+                                  tExpressionA: AST_B_Expression,
+                                  tExpressionB: AST_B_Expression) extends AST_B_Expression
 
-case class AST_B_ComparatorExpression(tOperator: A_Comparator, tExpressionA: AST_A_Expression, tExpressionB: AST_A_Expression) extends AST_B_Expression
+case class AST_B_ComparatorExpression(tOperator: A_Comparator,
+                                      tExpressionA: AST_A_Expression,
+                                      tExpressionB: AST_A_Expression) extends AST_B_Expression
 
 case class AST_B_UnaryExpression(tOperator: B_UnaryOperator, tExpression: AST_B_Expression) extends AST_B_Expression
 
 case class AST_B_Value(tValue: Boolean) extends AST_B_Expression
 
 
-case class AST_A_BinaryExpression(tOperator: A_BinaryOperator, tExpressionA: AST_A_Expression, tExpressionB: AST_A_Expression) extends AST_A_Expression
+case class AST_A_BinaryExpression(tOperator: A_BinaryOperator,
+                                  tExpressionA: AST_A_Expression,
+                                  tExpressionB: AST_A_Expression) extends AST_A_Expression
 
 case class AST_A_UnaryExpression(tOperator: A_UnaryOperator, tExpression: AST_A_Expression) extends AST_A_Expression
 
@@ -88,8 +98,8 @@ case class AST_A_Variable(tName: String) extends AST_A_Expression
 case class AST_A_Value(tValue: Int) extends AST_A_Expression
 
 
-case class CFG(graph: Graph[Int, DiEdge], labels: Map[Int, AST_Command]) {
-  def extend(graph2: Graph[Int, DiEdge], labels2: Map[Int, AST_Command]): CFG =
+case class CFG(graph: Graph[Int, LDiEdge], labels: Map[Int, AST_Command]) {
+  def extend(graph2: Graph[Int, LDiEdge], labels2: Map[Int, AST_Command]): CFG =
     CFG(graph ++ graph2, labels ++ labels2)
 
   def extend(cfg2: CFG): CFG =
@@ -98,13 +108,18 @@ case class CFG(graph: Graph[Int, DiEdge], labels: Map[Int, AST_Command]) {
   def mapOp(op: Map[Int, AST_Command] => Map[Int, AST_Command]): CFG =
     CFG(graph, op(labels))
 
-  def graphOp(op: Graph[Int, DiEdge] => Graph[Int, DiEdge]): CFG =
+  def graphOp(op: Graph[Int, LDiEdge] => Graph[Int, LDiEdge]): CFG =
     CFG(op(graph), labels)
 
   def nodeToString(i: Int): String = labels.get(i) match {
     case Some(cmd) => i + " " + cmd.toString.split('\n').apply(0)
     case None => i + " _"
   }
+
+  def next(source: Int, path: String): Option[Int] = this.graph.get(source).edges.find(e => e.edge match {
+    case LDiEdge(from, _, lbl) if lbl == path && from == source => true
+    case _ => false
+  }).map(_.to.value)
 
   def edgeToString(i1: Int, i2: Int): Option[String] = labels.get(i1) match {
     case Some(AST_If(_, _, _)) => i2 - i1 match {
@@ -132,13 +147,15 @@ object Utils {
     case AST_A_Variable(tName) => tName
     case AST_Assign(tVariable, tValue) => ASTtoString(tVariable) + " := " + ASTtoString(tValue)
     case AST_Sequence(seq) => seq.foldLeft[String]("")((s, cmd) => s + "\n" + ASTtoString(cmd))
-    case AST_If(tCondition, tThen, tElse) => s"if (${ASTtoString(tCondition)})\nthen\n${ASTtoString(tThen)}\nelse\n${ASTtoString(tElse)}\nend if"
+    case AST_If(tCondition, tThen, tElse) =>
+      s"if (${ASTtoString(tCondition)})\nthen\n${ASTtoString(tThen)}\nelse\n${ASTtoString(tElse)}\nend if"
     case AST_B_BinaryExpression(op, a, b) =>
       ASTtoString(a) + (op match {
         case Or_Operator => "|"
         case And_Operator => "&"
       }) + ASTtoString(b)
-    case AST_While(tCondition, tExpression) => s"while (${ASTtoString(tCondition)})\ndo\n${ASTtoString(tExpression)}\nend while"
+    case AST_While(tCondition, tExpression) =>
+      s"while (${ASTtoString(tCondition)})\ndo\n${ASTtoString(tExpression)}\nend while"
     case AST_B_ComparatorExpression(tOperator, a, b) =>
       ASTtoString(a) + (tOperator match {
         case Greater_Equal_Comparator => ">="
@@ -199,6 +216,22 @@ object Utils {
       state.set(tVariable.tName, eval(tExpression, state))
   }
 
+  def exec(cfg: CFG, label: Int, state: State): State = cfg.labels.getOrElse(label, AST_Skip()) match {
+    case AST_If(cond, _, _) =>
+      cfg.next(label, eval(cond, state).toString) match {
+        case Some(next) => exec(cfg, next, state)
+      }
+    case AST_While(cond, _) =>
+      cfg.next(label, eval(cond, state).toString) match {
+        case Some(next) => exec(cfg, next, state)
+      }
+    case other =>
+      cfg.next(label, "") match {
+        case Some(next) => exec(cfg, next, exec(other, state))
+        case None => state
+      }
+  }
+
   def ASTtoCFG_aux(exp: AST_Command, i: Int): (CFG, Int) = exp match {
     case AST_If(_, tThen, tElse) =>
       val (tThenCfg, firstElseI) = ASTtoCFG_aux(tThen, i + 1)
@@ -207,10 +240,10 @@ object Utils {
         tThenCfg
           .extend(tElseCfg)
           .graphOp(_
-            + i ~> (i + 1)
-            + i ~> firstElseI
-            + (firstElseI - 1) ~> availableI
-            - (firstElseI - 1) ~> firstElseI)
+            + (i ~+> (i + 1)) ("true")
+            + (i ~+> firstElseI) ("false")
+            + ((firstElseI - 1) ~+> availableI) ("")
+            - ((firstElseI - 1) ~+> firstElseI) (""))
           .mapOp(_ + (i -> exp)),
         availableI
       )
@@ -218,7 +251,7 @@ object Utils {
     case AST_Assign(_, _) =>
       (
         CFG(
-          Graph(i ~> (i + 1)),
+          Graph((i ~+> (i + 1)) ("")),
           Map(i -> exp)
         ),
         i + 1
@@ -230,7 +263,7 @@ object Utils {
           (
             accCfg
               .extend(subCfg)
-              .graphOp(_ + accI ~> (accI + 1))
+              .graphOp(_ + (accI ~+> (accI + 1)) (""))
               .mapOp(_ + (accI -> cmd)),
             subNextI
           )
@@ -240,10 +273,10 @@ object Utils {
       (
         tExpCfg
           .graphOp(_
-            + i ~> (i + 1)
-            + (tExpi - 1) ~> i
-            + (i ~> tExpi)
-            - (tExpi - 1) ~> tExpi
+            + (i ~+> (i + 1)) ("true")
+            + ((tExpi - 1) ~+> i) ("")
+            + (i ~+> tExpi) ("false")
+            - ((tExpi - 1) ~+> tExpi) ("")
           )
           .mapOp(_ + (i -> exp)),
         tExpi
@@ -251,6 +284,72 @@ object Utils {
   }
 
   def ASTtoCFG(exp: AST_Command): CFG = ASTtoCFG_aux(exp, 0)._1
+
+  def replace(exp: AST_A_Variable, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_A_Variable = exp match {
+    case AST_A_Variable(searchVar.tName) => newVar
+    case AST_A_Variable(_) => exp
+  }
+
+  def replace(exp: AST_A_Expression, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_A_Expression = exp match {
+    case variable@AST_A_Variable(_) => replace(variable, searchVar, newVar)
+    case value@AST_A_Value(_) => value
+    case AST_A_UnaryExpression(op, e) =>
+      AST_A_UnaryExpression(op, replace(e, searchVar, newVar))
+    case AST_A_BinaryExpression(op, a, b) =>
+      AST_A_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+  }
+
+  def replace(exp: AST_B_Expression, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_B_Expression = exp match {
+    case AST_B_ComparatorExpression(comp, a, b) =>
+      AST_B_ComparatorExpression(comp, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+    case AST_B_BinaryExpression(op, a, b) =>
+      AST_B_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+    case AST_B_UnaryExpression(op, e) =>
+      AST_B_UnaryExpression(op, replace(e, searchVar, newVar))
+    case AST_B_Value(_) => exp
+  }
+
+  def replace(exp: AST_Command, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_Command = exp match {
+    case AST_If(cond, tThen, tElse) =>
+      AST_If(replace(cond, searchVar, newVar), replace(tThen, searchVar, newVar), replace(tElse, searchVar, newVar))
+    case AST_While(cond, expr) =>
+      AST_While(replace(cond, searchVar, newVar), replace(expr, searchVar, newVar))
+    case skip@AST_Skip() => skip
+    case AST_Sequence(seq) =>
+      AST_Sequence(seq.map(cmd => replace(cmd, searchVar, newVar)))
+    case AST_Assign(tVariable, tValue) =>
+      AST_Assign(replace(tVariable, searchVar, newVar), replace(tValue, searchVar, newVar))
+  }
+
+  /*
+    def replace[T <: AST](exp:AST, searchVar: AST_A_Variable, newVar: AST_A_Variable) : T = exp match {
+      case AST_If(cond, tThen, tElse) =>
+        AST_If(replace(cond, searchVar, newVar), replace(tThen, searchVar, newVar), replace(tElse, searchVar, newVar))
+      case AST_While(cond, expr) =>
+        AST_While(replace(cond, searchVar, newVar), replace(expr, searchVar, newVar))
+      case skip @ AST_Skip() => skip
+      case AST_Sequence(seq) =>
+        AST_Sequence(seq.map(cmd => replace(cmd, searchVar, newVar)))
+      case AST_Assign(tVariable, tValue) =>
+        AST_Assign(replace(tVariable, searchVar, newVar), replace(tValue, searchVar, newVar))
+      case AST_B_ComparatorExpression(comp, a, b) =>
+        AST_B_ComparatorExpression(comp, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+      case AST_B_BinaryExpression(op, a, b) =>
+        AST_B_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+      case AST_B_UnaryExpression(op, e) =>
+        AST_B_UnaryExpression(op, replace(e, searchVar, newVar))
+      case AST_B_Value(_) => exp
+      case variable @ AST_A_Variable(_) => replace(variable, searchVar, newVar)
+      case value @ AST_A_Value(_) => value
+      case AST_A_UnaryExpression(op, e) =>
+        AST_A_UnaryExpression(op, replace(e, searchVar, newVar))
+      case AST_A_BinaryExpression(op, a, b) =>
+        AST_A_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
+      case AST_A_Variable(searchVar.tName) => newVar
+      case AST_A_Variable(_) => exp
+    }*/
+
+
 }
 
 
@@ -285,14 +384,14 @@ object Main extends App {
     id = Some("CFG")
   )
 
-  def edgeTransformer(innerEdge: Graph[Int, DiEdge]#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
-    case DiEdge(source, target) =>
+  def edgeTransformer(innerEdge: Graph[Int, LDiEdge]#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
+    case LDiEdge(source, target, value: String) =>
       Some((dotRoot, DotEdgeStmt(
         graph.nodeToString(source.value),
         graph.nodeToString(target.value),
-        graph.edgeToString(source.value, target.value) match {
-          case Some(s) => Seq(DotAttr("label", s))
-          case None => Seq()
+        value match {
+          case "" => Seq()
+          case _ => Seq(DotAttr("label", value.toString))
         }
       )))
   }
@@ -300,10 +399,14 @@ object Main extends App {
   val dot = graph.graph.toDot(dotRoot, edgeTransformer = edgeTransformer)
 
   new PrintWriter("output.dot") {
-    write(dot);
-    close
+    write(dot)
+    close()
   }
 
   println(dot)
+
+  println(Utils.exec(tree, State(Map())))
+  println(Utils.exec(graph, 0, State(Map())))
+
 
 }
