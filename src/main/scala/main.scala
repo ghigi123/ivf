@@ -104,6 +104,34 @@ object main extends App {
 
   case class CFG(graph: CFGGraph, labels: Map[Int, AST_Command]) {
 
+    private val cfg = this
+
+    class CFGTraverser(label: Int, state: State) extends Traversable[CFGGraph#NodeT] {
+      override def foreach[U](f: CFGGraph#NodeT => U): Unit = exec(cfg, label, state, f)
+
+      def exec[U](cfg: CFG, label: Int, state: State, f: CFGGraph#NodeT => U): State = {
+        val node = cfg.graph get label
+        f(node)
+        cfg.labels.getOrElse(label, AST_Skip()) match {
+          case AST_If(cond, _, _) =>
+            val next = cfg.next(label, Utils.eval(cond, state).toString).get
+            exec[U](cfg, next, state, f)
+          case AST_While(cond, _) =>
+            val next = cfg.next(label, Utils.eval(cond, state).toString).get
+            exec[U](cfg, next, state, f)
+          case other =>
+            cfg.next(label, "") match {
+              case Some(next) => exec[U](cfg, next, Utils.exec(other, state), f)
+              case None => state
+            }
+        }
+      }
+    }
+
+    def getAST(label: Int): AST = labels.getOrElse(label, AST_Skip())
+
+    def exec(label: Int, state: State) = new CFGTraverser(label, state)
+
     def extend(graph2: CFGGraph, labels2: Map[Int, AST_Command]): CFG =
       CFG(graph ++ graph2, labels ++ labels2)
 
@@ -411,6 +439,18 @@ object main extends App {
 
   println(Utils.exec(tree, State(Map())))
   println(Utils.exec(graph, 0, State(Map())))
+  val res = ("" /:
+    graph
+      .exec(0, State(Map()))
+      .filter(n => graph.getAST(n.value) match {
+        case AST_Assign(AST_A_Variable("z"), _) => true
+        case _ => false
+      })
+    ) ((acc, node) => acc + " " + node.value)
+
+  println(res)
+
+
   println(Utils.execCollectNodes(graph, 0, State(Map()), node => graph.labels.getOrElse(node.value, AST_Skip()) match {
     case AST_Assign(AST_A_Variable("z"), _) => true
     case _ => false
