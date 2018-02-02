@@ -1,13 +1,14 @@
 import java.io.PrintWriter
 
 import scalax.collection.Graph
-import scalax.collection.GraphPredef._
 import scalax.collection.io.dot._
 import scalax.collection.edge.LDiEdge
-
 import scalax.collection.edge.Implicits._
-
+import scalax.collection.GraphPredef._
+import scalax.collection.GraphEdge._
 import implicits._
+import scala.collection.immutable.Queue
+import scalax.collection.GraphTraversal
 
 object main extends App {
 
@@ -54,6 +55,8 @@ object main extends App {
   case object Less_Equal_Comparator extends A_Comparator
 
   case object Less_Comparator extends A_Comparator
+
+  case object Equal_Comparator extends A_Comparator
 
 
   sealed abstract class AST {
@@ -195,6 +198,17 @@ object main extends App {
           case Greater_Comparator => ">"
           case Less_Equal_Comparator => "<="
           case Less_Comparator => "<"
+          case Equal_Comparator => "="
+        }) + ASTtoString(b)
+      case AST_A_UnaryExpression(op, e) => (op match {
+        case Less_Operator => "-"
+      }) + ASTtoString(e)
+      case AST_A_BinaryExpression(op, a, b) =>
+        ASTtoString(a) + (op match {
+          case Less_Operator => "-"
+          case Plus_Operator => "+"
+          case Div_Operator => "/"
+          case Times_Operator => "*"
         }) + ASTtoString(b)
       case AST_B_Value(v) => v.toString
       case AST_Skip() => "skip"
@@ -215,6 +229,7 @@ object main extends App {
         case Greater_Comparator => eval(a, state) > eval(b, state)
         case Less_Equal_Comparator => eval(a, state) <= eval(b, state)
         case Less_Comparator => eval(a, state) < eval(b, state)
+        case Equal_Comparator => eval(a, state) == eval(b, state)
       }
     }
 
@@ -293,54 +308,58 @@ object main extends App {
         (set, node) => if (criterion(node)) set + node else set
       )
 
-    def ASTtoCFG_aux(exp: AST_Command, i: Int): (CFG, Int) = exp match {
+    def ASTtoCFG_aux(exp: AST_Command, i: Int): (CFG, Int, List[Int]) = exp match {
       case AST_If(_, tThen, tElse) =>
-        val (tThenCfg, firstElseI) = ASTtoCFG_aux(tThen, i + 1)
-        val (tElseCfg, availableI) = ASTtoCFG_aux(tElse, firstElseI)
+        val (tThenCfg, firstElseI, thenOuts) = ASTtoCFG_aux(tThen, i + 1)
+        val (tElseCfg, availableI, elseOuts) = ASTtoCFG_aux(tElse, firstElseI)
         (
           tThenCfg
             .extend(tElseCfg)
             .graphOp(_
               + (i ~+> (i + 1)) ("true")
               + (i ~+> firstElseI) ("false")
-              + ((firstElseI - 1) ~+> availableI) ("")
-              - ((firstElseI - 1) ~+> firstElseI) (""))
+              -- thenOuts.map(outI => (outI ~+> firstElseI) (""))
+              ++ thenOuts.map(outI => (outI ~+> availableI) (""))
+            )
             .mapOp(_ + (i -> exp)),
-          availableI
+          availableI, thenOuts ++ elseOuts
         )
-      case AST_Skip() => (CFG(Graph((i ~+> (i + 1)) ("")), Map(i -> exp)), i + 1)
+      case AST_Skip() => (CFG(Graph((i ~+> (i + 1)) ("")), Map(i -> exp)), i + 1, List(i))
       case AST_Assign(_, _) =>
         (
           CFG(
             Graph((i ~+> (i + 1)) ("")),
             Map(i -> exp)
           ),
-          i + 1
+          i + 1,
+          List(i)
         )
       case AST_Sequence(seq) =>
-        ((CFG.empty(), i) /: seq) {
-          case ((accCfg, accI), cmd) =>
-            val (subCfg, subNextI) = ASTtoCFG_aux(cmd, accI)
+        ((CFG.empty(), i, List(i)) /: seq) {
+          case ((accCfg, accI, _), cmd) =>
+            val (subCfg, subNextI, _) = ASTtoCFG_aux(cmd, accI)
             (
               accCfg
                 .extend(subCfg)
                 .graphOp(_ + (accI ~+> (accI + 1)) (""))
                 .mapOp(_ + (accI -> cmd)),
-              subNextI
+              subNextI,
+              List(accI)
             )
         }
       case AST_While(tCondition, tExpression) =>
-        val (tExpCfg, tExpi) = ASTtoCFG_aux(tExpression, i + 1)
+        val (tExpCfg, tExpi, outs) = ASTtoCFG_aux(tExpression, i + 1)
         (
           tExpCfg
             .graphOp(_
               + (i ~+> (i + 1)) ("true")
-              + ((tExpi - 1) ~+> i) ("")
               + (i ~+> tExpi) ("false")
-              - ((tExpi - 1) ~+> tExpi) ("")
+              ++ outs.map(outI => (outI ~+> i) (""))
+              -- outs.map(outI => (outI ~+> tExpi) (""))
             )
             .mapOp(_ + (i -> exp)),
-          tExpi
+          tExpi,
+          List(i)
         )
     }
 
@@ -382,34 +401,108 @@ object main extends App {
         AST_Assign(replace(tVariable, searchVar, newVar), replace(tValue, searchVar, newVar))
     }
 
+    def execCollectLabels(cfg: CFG, state: State): Set[Int] =
+      graph.exec(0, state).map(_.value).toSet
 
+
+    def requiredNodesAllAssign(cfg: CFG): Set[Int] =
+      cfg.labels.filter {
+        case (_, AST_Assign(_, _)) => true
+        case _ => false
+      }.keys.toSet
+
+    def foundLabels(cfg: CFG, states: Iterable[State]): Set[Int] =
+      states.map(execCollectLabels(cfg, _)).reduce((a, b) => a ++ b)
+
+    def assignCriterion(cfg: CFG, states: Iterable[State]): Set[Int] = {
+      val requiredLabelsSet = requiredNodesAllAssign(cfg)
+      val foundLabelsSet = foundLabels(cfg, states)
+      requiredLabelsSet &~ foundLabelsSet
+    }
+
+    def requiredNodesAllDecisions(cfg: CFG): Set[Int] = {
+      cfg.graph.edges
+        .filter { case LDiEdge(_, _, l) => l == "true" || l == "false" }
+        .map { case LDiEdge(_, t: Int, _) => t.value }
+        .toSet
+    }
+
+    def allDecisionsCriterion(cfg: CFG, states: Iterable[State]): Set[Int] = {
+      requiredNodesAllDecisions(cfg) &~ foundLabels(cfg, states)
+    }
+
+    def buildKPaths(cfg: CFG, label: Int, path: Vector[Int], k: Int): Set[Vector[Int]] = {
+      if (!cfg.labels.contains(label)) Set(path)
+      else if (k == 0) Set()
+      else cfg.graph.get(label).diSuccessors.map(node =>
+        buildKPaths(cfg, node.value, path :+ node.value, k - 1)
+      ).reduce((a, b) => a ++ b)
+    }
+
+    def requiredNodesKPaths(cfg: CFG, k: Int): Set[Int] = {
+      val paths = buildKPaths(cfg, 0, Vector(0), k)
+      (Set[Int]() /: paths) ((acc, vec) => acc ++ vec.toSet)
+    }
+
+    def kPathsCriterion(cfg: CFG, k: Int, states: Iterable[State]): Set[Int] = {
+      requiredNodesKPaths(cfg, k) &~ foundLabels(cfg, states)
+    }
+
+    def isWhile(cfg: CFG, label: Int): Boolean = {
+      cfg.labels.getOrElse(label, AST_Skip()) match {
+        case AST_While(_, _) => true
+        case _ => false
+      }
+    }
+
+    def iLoopPathsAux(cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int]): Set[Vector[Int]] =
+      if (!cfg.labels.contains(label)) Set(path)
+      else if (!loopStates.values.forall(amt => amt <= i)) Set()
+      else cfg.graph.get(label).diSuccessors.map(node => {
+        val newLoopStates = if (isWhile(cfg, node.value) && label < node.value) {
+          loopStates + (node.value -> 0)
+        } else if (isWhile(cfg, label) && cfg.graph.find((label ~+> node.value) ("true")).nonEmpty) {
+          loopStates + (label -> (loopStates(label) + 1))
+        } else loopStates
+        iLoopPathsAux(cfg, node.value, path :+ node.value, i, newLoopStates)
+      }
+      ).reduce((a, b) => a ++ b)
+
+    def iLoopPaths(cfg: CFG, label: Int, i: Int): Set[Vector[Int]] = {
+      val loopStates = cfg.labels.keys.filter(isWhile(cfg, _)).map(_ -> 0).toMap
+      iLoopPathsAux(cfg, label, Vector(label), i, loopStates)
+    }
   }
 
 
   val tree = AST_Sequence(List(
-    AST_Assign(AST_A_Variable("x"), AST_A_Value(1)),
-    AST_If(AST_B_ComparatorExpression(Less_Equal_Comparator, AST_A_Variable("x"), AST_A_Value(0)),
-      AST_Assign(AST_A_Variable("y"), AST_A_Value(2)),
-      AST_Sequence(List(
-        AST_If(AST_B_ComparatorExpression(Less_Equal_Comparator, AST_A_Variable("x"), AST_A_Value(0)),
-          AST_Skip(),
-          AST_Sequence(List(
-            AST_Assign(AST_A_Variable("z"), AST_A_Value(3)),
-            AST_Assign(AST_A_Variable("z"), AST_A_Value(4)),
-            AST_While(AST_B_Value(false), AST_Sequence(List(
-              AST_Assign(AST_A_Variable("z"), AST_A_Value(3)),
-              AST_Assign(AST_A_Variable("a"), AST_A_Value(4)),
-              AST_Assign(AST_A_Variable("b"), AST_A_Value(4))
-            )))
-          ))
-        ),
-        AST_Assign(AST_A_Variable("z"), AST_A_Value(4))
-      ))
+    AST_If(
+      AST_B_ComparatorExpression(Less_Equal_Comparator, AST_A_Variable("X"), AST_A_Value(0)),
+      AST_Assign(AST_A_Variable("X"), AST_A_UnaryExpression(Less_Operator, AST_A_Variable("X"))),
+      AST_Assign(AST_A_Variable("X"), AST_A_BinaryExpression(Less_Operator, AST_A_Value(1), AST_A_Variable("X")))
     ),
-    AST_Assign(AST_A_Variable("t"), AST_A_Value(4))
+    AST_If(
+      AST_B_ComparatorExpression(Equal_Comparator, AST_A_Variable("X"), AST_A_Value(1)),
+      AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
+      AST_Assign(AST_A_Variable("X"), AST_A_BinaryExpression(Plus_Operator, AST_A_Value(1), AST_A_Variable("X")))
+    ),
   ))
 
-  val graph = Utils.ASTtoCFG(tree)
+  val tree2 = AST_Sequence(List(
+    AST_While(AST_B_Value(true),
+      AST_If(AST_B_Value(true),
+        AST_Sequence(
+          List(
+            AST_Skip(),
+            AST_Skip()
+          )
+        ),
+        AST_Skip()
+      )
+    )
+  ))
+
+  val graph = Utils.ASTtoCFG(tree2)
 
   val dotRoot = DotRootGraph(
     directed = true,
@@ -430,31 +523,14 @@ object main extends App {
 
   val dot = graph.graph.toDot(dotRoot, edgeTransformer = edgeTransformer)
 
+  println(Utils.buildKPaths(graph, 0, Vector(0), 7))
+
   new PrintWriter("output.dot") {
     write(dot)
     close()
   }
 
   println(dot)
-
-  println(Utils.exec(tree, State(Map())))
-  println(Utils.exec(graph, 0, State(Map())))
-  val res = ("" /:
-    graph
-      .exec(0, State(Map()))
-      .filter(n => graph.getAST(n.value) match {
-        case AST_Assign(AST_A_Variable("z"), _) => true
-        case _ => false
-      })
-    ) ((acc, node) => acc + " " + node.value)
-
-  println(res)
-
-
-  println(Utils.execCollectNodes(graph, 0, State(Map()), node => graph.labels.getOrElse(node.value, AST_Skip()) match {
-    case AST_Assign(AST_A_Variable("z"), _) => true
-    case _ => false
-  }))
 
 }
 
