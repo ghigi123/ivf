@@ -5,10 +5,7 @@ import scalax.collection.io.dot._
 import scalax.collection.edge.LDiEdge
 import scalax.collection.edge.Implicits._
 import scalax.collection.GraphPredef._
-import scalax.collection.GraphEdge._
 import implicits._
-import scala.collection.immutable.Queue
-import scalax.collection.GraphTraversal
 
 object main extends App {
 
@@ -152,10 +149,11 @@ object main extends App {
       case None => i + " _"
     }
 
-    def next(source: Int, path: String): Option[Int] = this.graph.get(source).edges.find(e => e.edge match {
-      case LDiEdge(from, _, lbl) if lbl == path && from == source => true
-      case _ => false
-    }).map(_.to.value)
+    def next(source: Int, path: String): Option[Int] =
+      this.graph.get(source).edges.find(e => e.edge match {
+        case LDiEdge(from, _, lbl) if lbl == path && from == source => true
+        case _ => false
+      }).map(_.to.value)
 
     def edgeToString(i1: Int, i2: Int): Option[String] = labels.get(i1) match {
       case Some(AST_If(_, _, _)) => i2 - i1 match {
@@ -427,20 +425,24 @@ object main extends App {
         .toSet
     }
 
-    def allDecisionsCriterion(cfg: CFG, states: Iterable[State]): Set[Int] = {
+    def allDecisionsCriterion(cfg: CFG, states: Iterable[State]): Set[Int] =
       requiredNodesAllDecisions(cfg) &~ foundLabels(cfg, states)
-    }
 
-    def buildKPaths(cfg: CFG, label: Int, path: Vector[Int], k: Int): Set[Vector[Int]] = {
+
+    def buildKPathsAux(cfg: CFG, label: Int, path: Vector[Int], k: Int): Set[Vector[Int]] = {
       if (!cfg.labels.contains(label)) Set(path)
       else if (k == 0) Set()
       else cfg.graph.get(label).diSuccessors.map(node =>
-        buildKPaths(cfg, node.value, path :+ node.value, k - 1)
+        buildKPathsAux(cfg, node.value, path :+ node.value, k - 1)
       ).reduce((a, b) => a ++ b)
     }
 
+    def buildKPaths(cfg: CFG, k: Int): Set[Vector[Int]] = {
+      buildKPathsAux(cfg, 0, Vector(0), k)
+    }
+
     def requiredNodesKPaths(cfg: CFG, k: Int): Set[Int] = {
-      val paths = buildKPaths(cfg, 0, Vector(0), k)
+      val paths = buildKPaths(cfg, k)
       (Set[Int]() /: paths) ((acc, vec) => acc ++ vec.toSet)
     }
 
@@ -451,6 +453,13 @@ object main extends App {
     def isWhile(cfg: CFG, label: Int): Boolean = {
       cfg.labels.getOrElse(label, AST_Skip()) match {
         case AST_While(_, _) => true
+        case _ => false
+      }
+    }
+
+    def isAssign(cfg: CFG, label: Int): Boolean = {
+      cfg.labels.getOrElse(label, AST_Skip()) match {
+        case AST_Assign(_, _) => true
         case _ => false
       }
     }
@@ -468,10 +477,162 @@ object main extends App {
       }
       ).reduce((a, b) => a ++ b)
 
+    def iLoopPathsAux2(cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int]): Set[Vector[Int]] =
+      forwardPathBuilderAux(cfg, label, Vector(label), i, loopStates, None, (_,_,_) => (None,None))
+
     def iLoopPaths(cfg: CFG, label: Int, i: Int): Set[Vector[Int]] = {
       val loopStates = cfg.labels.keys.filter(isWhile(cfg, _)).map(_ -> 0).toMap
-      iLoopPathsAux(cfg, label, Vector(label), i, loopStates)
+      iLoopPathsAux2(cfg, label, Vector(label), i, loopStates)
     }
+
+    def isDef(cmd: AST, variable: AST_A_Variable): Boolean =
+      cmd match {
+        case AST_Assign(tVar, _) if tVar.tName == variable.tName => true
+        case _ => false
+      }
+
+    def isRef(cmd: AST, variable: AST_A_Variable): Boolean =
+      cmd match {
+        case AST_A_Variable(tName) if tName == variable.tName => true
+        case AST_A_Variable(tName) if tName != variable.tName => false
+        case AST_A_Value(_) => false
+        case AST_A_UnaryExpression(_, e) => isRef(e, variable)
+        case AST_A_BinaryExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
+        case AST_B_UnaryExpression(_, e) => isRef(e, variable)
+        case AST_B_BinaryExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
+        case AST_B_ComparatorExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
+        case AST_B_Value(_) => false
+        case AST_If(a, _, _) => isRef(a, variable)
+        case AST_While(a, _) => isRef(a, variable)
+        case AST_Skip() => false
+        case AST_Assign(_, tValue) => isRef(tValue, variable)
+      }
+
+    def forwardPathBuilderAux[P](cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int], param: P, lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+      if (!cfg.labels.contains(label)) Set(path)
+      else if (!loopStates.values.forall(amt => amt <= i)) Set()
+      else cfg.graph.get(label).diSuccessors.map(node => {
+        val newLoopStates = if (isWhile(cfg, node.value) && label < node.value) {
+          loopStates + (node.value -> 0)
+        } else if (isWhile(cfg, label) && cfg.graph.find((label ~+> node.value) ("true")).nonEmpty) {
+          loopStates + (label -> (loopStates(label) + 1))
+        } else loopStates
+        val (res, nextParam) = lambda(node.value, param, path)
+        res match {
+          case Some(set) => set
+          case None => forwardPathBuilderAux[P](cfg, node.value, path :+ node.value, i, newLoopStates, nextParam, lambda)
+        }
+      }
+      ).reduce((a, b) => a ++ b)
+
+    def backwardPathBuilderAux[P](cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int], param: P, lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+      if (!cfg.labels.contains(label)) Set(path)
+      else if (!loopStates.values.forall(amt => amt <= i + 1)) Set()
+      else cfg.graph.get(label).diPredecessors.map(node => {
+        val newLoopStates = if (isWhile(cfg, label) && label > node.value) {
+          loopStates + (label -> 0)
+        } else if (isWhile(cfg, node.value) && cfg.graph.find((node.value ~+> label) ("true")).nonEmpty) {
+          loopStates + (node.value -> (loopStates(node.value) + 1))
+        } else loopStates
+        val (res, nextParam) = lambda(node.value, param, path)
+        res match {
+          case Some(set) => set
+          case None => backwardPathBuilderAux[P](cfg, node.value, node.value +: path, i, newLoopStates, nextParam, lambda)
+        }
+      }
+      ).foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
+
+    def allDefinitionsAux(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
+      def lambda(nextNodeLabel: Int, localVariable: AST_A_Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST_A_Variable) = {
+        val cmd = cfg.getAST(nextNodeLabel)
+        if (!cfg.labels.contains(nextNodeLabel)) (Some(Set[Vector[Int]]()), localVariable)
+        else if (isRef(cmd, localVariable)) (Some(Set(path :+ nextNodeLabel)), localVariable)
+        else if (isDef(cmd, localVariable)) (Some(Set[Vector[Int]]()), localVariable)
+        else (None, variable)
+      }
+
+      val loopStates = cfg.labels.keys.filter(isWhile(cfg, _)).map(_ -> 0).toMap
+      forwardPathBuilderAux(cfg, label, Vector(label), maxLoopExec, loopStates, variable, lambda)
+    }
+
+    def allDefinitionsPaths(cfg: CFG, maxLoopDepth: Int): Map[Int, Set[Vector[Int]]] = {
+      cfg.labels
+        .filterKeys(isAssign(cfg, _))
+        .map {
+          case (label: Int, AST_Assign(tVariable, _)) =>
+            label -> allDefinitionsAux(cfg, label, tVariable, Vector(label), maxLoopDepth)
+        }
+    }
+
+    def allUsagesAux(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int]): Set[Vector[Int]] =
+      cfg
+        .graph
+        .get(label)
+        .diPredecessors
+        .map(node => {
+          val cmd = cfg.getAST(node.value)
+          if (isDef(cmd, variable)) Set(node.value +: path)
+          else if (node.value == 0) Set[Vector[Int]]()
+          else allUsagesAux(cfg, node.value, variable, node.value +: path)
+        })
+        .foldLeft[Set[Vector[Int]]](Set[Vector[Int]]())((a, b) => a ++ b)
+
+    def allUsagesAux2(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
+      def lambda(nextNodeLabel: Int, localVariable: AST_A_Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST_A_Variable) = {
+        val cmd = cfg.getAST(nextNodeLabel)
+        if (isDef(cmd, variable)) (Some(Set(nextNodeLabel +: path)), localVariable)
+        else if (nextNodeLabel == 0) (Some(Set[Vector[Int]]()), localVariable)
+        else (None, localVariable)
+      }
+
+      val loopStates = cfg.labels.keys.filter(isWhile(cfg, _)).map(_ -> 0).toMap
+      backwardPathBuilderAux(cfg, label, Vector(label), maxLoopExec, loopStates, variable, lambda)
+    }
+
+    def DUPaths(cfg: CFG, maxLoopDepth: Int): Map[AST_A_Variable, Map[Int, Set[Vector[Int]]]] = {
+      val variables =
+        cfg
+          .labels
+          .values
+          .filter {
+            case AST_Assign(_, _) => true
+            case _ => false
+          }
+          .map {
+            case AST_Assign(a, _) => a
+          }
+          .toSet
+
+      val refs =
+        variables.map { variable =>
+          variable ->
+            cfg
+              .labels
+              .filter {
+                case (_, cmd) => isRef(cmd, variable)
+              }
+              .map {
+                case (lbl, _) => lbl
+              }
+        }.toMap
+
+      println(refs)
+
+      val usagePaths = refs.map {
+        case (tVar, potentialRefs) =>
+          tVar -> potentialRefs
+            .map { potentialRef =>
+              potentialRef -> allUsagesAux2(cfg, potentialRef, tVar, Vector(potentialRef), maxLoopDepth)
+            }
+            .toMap
+            .filter {
+              case (_, set) => set.nonEmpty
+            }
+      }
+
+      usagePaths
+    }
+
   }
 
 
@@ -502,7 +663,27 @@ object main extends App {
     )
   ))
 
-  val graph = Utils.ASTtoCFG(tree2)
+  val tree3 = AST_Sequence(List(
+    AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
+    AST_If(
+      AST_B_ComparatorExpression(Equal_Comparator, AST_A_Variable("Y"), AST_A_Value(0)),
+      AST_Assign(AST_A_Variable("X"), AST_A_Value(2)),
+      AST_Assign(AST_A_Variable("X"), AST_A_Value(3))
+    ),
+    AST_Assign(AST_A_Variable("Y"), AST_A_Variable("X"))
+  ))
+
+  val tree4 = AST_Sequence(List(
+    AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
+    AST_While(
+      AST_B_Value(true),
+      AST_Assign(AST_A_Variable("Y"), AST_A_Value(2)),
+    ),
+    AST_Assign(AST_A_Variable("Y"), AST_A_Variable("X")),
+    AST_Assign(AST_A_Variable("Z"), AST_A_Variable("X"))
+  ))
+
+  val graph = Utils.ASTtoCFG(tree4)
 
   val dotRoot = DotRootGraph(
     directed = true,
@@ -523,7 +704,6 @@ object main extends App {
 
   val dot = graph.graph.toDot(dotRoot, edgeTransformer = edgeTransformer)
 
-  println(Utils.buildKPaths(graph, 0, Vector(0), 7))
 
   new PrintWriter("output.dot") {
     write(dot)
@@ -531,6 +711,10 @@ object main extends App {
   }
 
   println(dot)
+
+  println(Utils.allDefinitionsPaths(graph, 1))
+  println(Utils.allUsagesPath(graph, 1))
+
 
 }
 
