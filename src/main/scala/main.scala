@@ -6,6 +6,10 @@ import scalax.collection.edge.LDiEdge
 import scalax.collection.edge.Implicits._
 import scalax.collection.GraphPredef._
 import implicits._
+import org.chocosolver.solver.Model
+import org.chocosolver.solver.search.strategy.Search
+import org.chocosolver.solver.variables.{BoolVar, IntVar}
+
 
 object main extends App {
 
@@ -188,6 +192,11 @@ object main extends App {
           case Or_Operator => "|"
           case And_Operator => "&"
         }) + ASTtoString(b)
+      case AST_B_UnaryExpression(op, e) => {
+        (op match {
+          case Not_Operator => "!"
+        }) + ASTtoString(e)
+      }
       case AST_While(tCondition, tExpression) =>
         s"while (${ASTtoString(tCondition)})\ndo\n${ASTtoString(tExpression)}\nend while"
       case AST_B_ComparatorExpression(tOperator, a, b) =>
@@ -478,7 +487,7 @@ object main extends App {
       ).reduce((a, b) => a ++ b)
 
     def iLoopPathsAux2(cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int]): Set[Vector[Int]] =
-      forwardPathBuilderAux(cfg, label, Vector(label), i, loopStates, None, (_,_,_) => (None,None))
+      forwardPathBuilderAux[None.type](cfg, label, Vector(label), i, loopStates, None, (_, _, _) => (None, None))
 
     def iLoopPaths(cfg: CFG, label: Int, i: Int): Set[Vector[Int]] = {
       val loopStates = cfg.labels.keys.filter(isWhile(cfg, _)).map(_ -> 0).toMap
@@ -508,39 +517,51 @@ object main extends App {
         case AST_Assign(_, tValue) => isRef(tValue, variable)
       }
 
-    def forwardPathBuilderAux[P](cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int], param: P, lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+    def forwardPathBuilderAux[P](cfg: CFG, label: Int,
+                                 path: Vector[Int], i: Int,
+                                 loopStates: Map[Int, Int],
+                                 param: P,
+                                 lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
       if (!cfg.labels.contains(label)) Set(path)
       else if (!loopStates.values.forall(amt => amt <= i)) Set()
-      else cfg.graph.get(label).diSuccessors.map(node => {
-        val newLoopStates = if (isWhile(cfg, node.value) && label < node.value) {
-          loopStates + (node.value -> 0)
-        } else if (isWhile(cfg, label) && cfg.graph.find((label ~+> node.value) ("true")).nonEmpty) {
-          loopStates + (label -> (loopStates(label) + 1))
-        } else loopStates
-        val (res, nextParam) = lambda(node.value, param, path)
-        res match {
-          case Some(set) => set
-          case None => forwardPathBuilderAux[P](cfg, node.value, path :+ node.value, i, newLoopStates, nextParam, lambda)
+      else cfg.graph.get(label)
+        .diSuccessors
+        .map(node => {
+          val newLoopStates = if (isWhile(cfg, node.value) && label < node.value) {
+            loopStates + (node.value -> 0)
+          } else if (isWhile(cfg, label) && cfg.graph.find((label ~+> node.value) ("true")).nonEmpty) {
+            loopStates + (label -> (loopStates(label) + 1))
+          } else loopStates
+          val (res, nextParam) = lambda(node.value, param, path)
+          res match {
+            case Some(set) => set
+            case None => forwardPathBuilderAux[P](cfg, node.value, path :+ node.value, i, newLoopStates, nextParam, lambda)
+          }
         }
-      }
-      ).reduce((a, b) => a ++ b)
+        )
+        .reduce((a, b) => a ++ b)
 
-    def backwardPathBuilderAux[P](cfg: CFG, label: Int, path: Vector[Int], i: Int, loopStates: Map[Int, Int], param: P, lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+    def backwardPathBuilderAux[P](cfg: CFG, label: Int,
+                                  path: Vector[Int], i: Int,
+                                  loopStates: Map[Int, Int], param: P,
+                                  lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
       if (!cfg.labels.contains(label)) Set(path)
       else if (!loopStates.values.forall(amt => amt <= i + 1)) Set()
-      else cfg.graph.get(label).diPredecessors.map(node => {
-        val newLoopStates = if (isWhile(cfg, label) && label > node.value) {
-          loopStates + (label -> 0)
-        } else if (isWhile(cfg, node.value) && cfg.graph.find((node.value ~+> label) ("true")).nonEmpty) {
-          loopStates + (node.value -> (loopStates(node.value) + 1))
-        } else loopStates
-        val (res, nextParam) = lambda(node.value, param, path)
-        res match {
-          case Some(set) => set
-          case None => backwardPathBuilderAux[P](cfg, node.value, node.value +: path, i, newLoopStates, nextParam, lambda)
-        }
-      }
-      ).foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
+      else cfg.graph.get(label)
+        .diPredecessors
+        .map(node => {
+          val newLoopStates = if (isWhile(cfg, label) && label > node.value) {
+            loopStates + (label -> 0)
+          } else if (isWhile(cfg, node.value) && cfg.graph.find((node.value ~+> label) ("true")).nonEmpty) {
+            loopStates + (node.value -> (loopStates(node.value) + 1))
+          } else loopStates
+          val (res, nextParam) = lambda(node.value, param, path)
+          res match {
+            case Some(set) => set
+            case None => backwardPathBuilderAux[P](cfg, node.value, node.value +: path, i, newLoopStates, nextParam, lambda)
+          }
+        })
+        .foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
 
     def allDefinitionsAux(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
       def lambda(nextNodeLabel: Int, localVariable: AST_A_Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST_A_Variable) = {
@@ -633,8 +654,124 @@ object main extends App {
       usagePaths
     }
 
-  }
+    def replaceVariables(cmd: AST_Command, variables: Map[AST_A_Variable, Int]): AST_Command =
+      (cmd /: variables) {
+        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+      }
 
+    def replaceVariables(cmd: AST_A_Expression, variables: Map[AST_A_Variable, Int]): AST_A_Expression =
+      (cmd /: variables) {
+        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+      }
+
+    def replaceVariables(cmd: AST_B_Expression, variables: Map[AST_A_Variable, Int]): AST_B_Expression =
+      (cmd /: variables) {
+        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+      }
+
+    def BuildConstraintsAux(cfg: CFG, path: Vector[Int], idx: Int, variableCounters: Map[AST_A_Variable, Int]): List[AST_B_Expression] =
+      if (idx == path.length)
+        List(AST_B_Value(true))
+      else {
+        val newVariableCounters: Map[AST_A_Variable, Int] = cfg.getAST(path(idx)) match {
+          case AST_Assign(tVariable, _) =>
+            variableCounters + (
+              if (variableCounters.contains(tVariable))
+                tVariable -> (variableCounters(tVariable) + 1)
+              else
+                tVariable -> 0
+              )
+          case _ => variableCounters
+        }
+
+        (cfg.getAST(path(idx)) match {
+          case AST_Assign(tVariable, tValue) =>
+            AST_B_ComparatorExpression(
+              Equal_Comparator,
+              replaceVariables(tVariable, newVariableCounters),
+              replaceVariables(tValue, variableCounters)
+            )
+          case AST_If(tCondition, _, _) =>
+            cfg.next(path(idx), "true") match {
+              case Some(nxt) if nxt == path(idx + 1) => replaceVariables(tCondition, variableCounters)
+              case _ => AST_B_UnaryExpression(Not_Operator, replaceVariables(tCondition, variableCounters))
+            }
+          case AST_While(tCondition, _) =>
+            cfg.next(path(idx), "true") match {
+              case Some(nxt) if nxt == path(idx + 1) => replaceVariables(tCondition, variableCounters)
+              case _ => AST_B_UnaryExpression(Not_Operator, replaceVariables(tCondition, variableCounters))
+            }
+          case _ => AST_B_Value(true)
+        }) :: BuildConstraintsAux(cfg, path, idx + 1, newVariableCounters)
+      }
+
+    def identifyVariables(exp: AST_B_Expression): Vector[AST_A_Variable] =
+      exp match {
+        case AST_B_UnaryExpression(_, e) => identifyVariables(e)
+        case AST_B_BinaryExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+        case AST_B_Value(_) => Vector()
+        case AST_B_ComparatorExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+      }
+
+    def identifyVariables(exp: AST_A_Expression): Vector[AST_A_Variable] =
+      exp match {
+        case AST_A_BinaryExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+        case AST_A_UnaryExpression(_, a) => identifyVariables(a)
+        case tVar: AST_A_Variable => Vector(tVar)
+        case AST_A_Value(_) => Vector()
+      }
+
+    def BuildConstraints(cfg: CFG, path: Vector[Int]): List[AST_B_Expression] = {
+      BuildConstraintsAux(cfg, path, 0, Map())
+    }
+
+    def constrainifyB(model: Model, cmd: AST_B_Expression, variables: Map[String, IntVar]): BoolVar = cmd match {
+      case AST_B_ComparatorExpression(op, a, b) =>
+        val av = constrainifyA(model, a, variables)
+        val bv = constrainifyA(model, b, variables)
+        op match {
+          case Equal_Comparator => av.eq(bv).boolVar()
+          case Less_Comparator => av.lt(bv).boolVar()
+          case Less_Equal_Comparator => av.le(bv).boolVar()
+          case Greater_Comparator => av.gt(bv).boolVar()
+          case Greater_Equal_Comparator => av.ge(bv).boolVar()
+        }
+      case AST_B_BinaryExpression(op, a, b) =>
+        val av = constrainifyB(model, a, variables)
+        val bv = constrainifyB(model, b, variables)
+        op match {
+          case And_Operator => av.and(bv).boolVar()
+          case Or_Operator => av.or(bv).boolVar()
+        }
+      case AST_B_UnaryExpression(op, a) =>
+        val av = constrainifyB(model, a, variables)
+        op match {
+          case Not_Operator => av.not().boolVar()
+        }
+      case AST_B_Value(tValue) =>
+        model.boolVar(tValue)
+    }
+
+    def constrainifyA(model: Model, cmd: AST_A_Expression, variables: Map[String, IntVar]): IntVar = cmd match {
+      case AST_A_Variable(tName) => variables(tName)
+      case AST_A_Value(tValue) => model.intVar(tValue)
+      case AST_A_BinaryExpression(op, a, b) =>
+        val av = constrainifyA(model, a, variables)
+        val bv = constrainifyA(model, b, variables)
+        op match {
+          case Plus_Operator => av.add(bv).intVar()
+          case Less_Operator => av.sub(bv).intVar()
+          case Times_Operator => av.mul(bv).intVar()
+          case Div_Operator => av.div(bv).intVar()
+        }
+      case AST_A_UnaryExpression(op, a) =>
+        val av = constrainifyA(model, a, variables)
+        op match {
+          case Less_Operator => model.intVar(0).sub(av).intVar()
+        }
+    }
+
+  }
 
   val tree = AST_Sequence(List(
     AST_If(
@@ -676,7 +813,7 @@ object main extends App {
   val tree4 = AST_Sequence(List(
     AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
     AST_While(
-      AST_B_Value(true),
+      AST_B_Value(false),
       AST_Assign(AST_A_Variable("Y"), AST_A_Value(2)),
     ),
     AST_Assign(AST_A_Variable("Y"), AST_A_Variable("X")),
@@ -712,9 +849,48 @@ object main extends App {
 
   println(dot)
 
-  println(Utils.allDefinitionsPaths(graph, 1))
-  println(Utils.allUsagesPath(graph, 1))
+
+  val kPaths = Utils.buildKPaths(graph, 5)
+  kPaths.foreach(path => {
+    println(path)
+    val constraints = Utils.BuildConstraints(graph, path)
+    val model: Model = new Model("test")
+    val variables = (Map[String, IntVar]() /: constraints) {
+      case (accMap, exp) =>
+        (accMap /: Utils.identifyVariables(exp)) {
+          case (accMap2, tVar) => if (accMap.contains(tVar.tName))
+            accMap2
+          else
+            accMap2 + (tVar.tName -> model.intVar(tVar.tName, -100, 100))
+        }
+    }
+
+    def varFirst(a: Either[Int, IntVar], b: Either[Int, IntVar]): (IntVar, Either[Int, IntVar]) = a match {
+      case Left(_) => b match {
+        case Right(v) => (v, a)
+      }
+      case Right(v) => (v, b)
+    }
 
 
+
+    constraints.foreach((exp: AST_B_Expression) => {
+      val constraint = Utils.constrainifyB(model, exp, variables).eq(model.boolVar(true))
+      println(exp)
+      constraint.post()
+    }
+    )
+
+    val solver = model.getSolver
+
+    solver.setSearch(Search.minDomLBSearch(variables.values.toSeq:_*))
+    if(solver.solve()) {
+      println("Solution found")
+      variables.foreach{
+        case (name, tVar) => println(name + " : " + tVar.getValue.toString)
+      }
+    } else {
+      solver.printStatistics()
+    }
+  })
 }
-
