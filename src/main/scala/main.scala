@@ -1,420 +1,31 @@
+package IVF
+
 import java.io.PrintWriter
 
-import scalax.collection.Graph
-import scalax.collection.io.dot._
-import scalax.collection.edge.LDiEdge
-import scalax.collection.edge.Implicits._
-import scalax.collection.GraphPredef._
-import implicits._
 import org.chocosolver.solver.Model
 import org.chocosolver.solver.search.strategy.Search
-import org.chocosolver.solver.variables.{BoolVar, IntVar}
+import org.chocosolver.solver.variables.IntVar
+
+import scalax.collection.GraphPredef._
+import scalax.collection.edge.Implicits._
+import scalax.collection.edge.LDiEdge
+import scalax.collection.io.dot._
+import scalax.collection.io.dot.implicits._
 
 
 object main extends App {
 
-  type CFGGraph = Graph[Int, LDiEdge]
-
-
-  case class State(values: Map[String, Int]) {
-    def get(key: String): Int = this.values(key)
-
-    def set(key: String, value: Int): State = State(this.values + (key -> value))
-  }
-
-  sealed trait B_BinaryOperator
-
-  case object Or_Operator extends B_BinaryOperator
-
-  case object And_Operator extends B_BinaryOperator
-
-
-  sealed trait B_UnaryOperator
-
-  case object Not_Operator extends B_UnaryOperator
-
-
-  sealed trait A_BinaryOperator
-
-  sealed trait A_UnaryOperator
-
-  case object Plus_Operator extends A_BinaryOperator
-
-  case object Less_Operator extends A_BinaryOperator with A_UnaryOperator
-
-  case object Times_Operator extends A_BinaryOperator
-
-  case object Div_Operator extends A_BinaryOperator
-
-
-  sealed trait A_Comparator
-
-  case object Greater_Equal_Comparator extends A_Comparator
-
-  case object Greater_Comparator extends A_Comparator
-
-  case object Less_Equal_Comparator extends A_Comparator
-
-  case object Less_Comparator extends A_Comparator
-
-  case object Equal_Comparator extends A_Comparator
-
-
-  sealed abstract class AST {
-    override def toString: String = Utils.ASTtoString(this)
-  }
-
-  abstract class AST_B_Expression extends AST
-
-  abstract class AST_A_Expression extends AST
-
-  abstract class AST_Command extends AST
-
-
-  case class AST_If(tCondition: AST_B_Expression, tThen: AST_Command, tElse: AST_Command) extends AST_Command
-
-  case class AST_While(tCondition: AST_B_Expression, tExpression: AST_Command) extends AST_Command
-
-  case class AST_Sequence(tExpressions: List[AST_Command]) extends AST_Command
-
-  case class AST_Skip() extends AST_Command
-
-  case class AST_Assign(tVariable: AST_A_Variable, tValue: AST_A_Expression) extends AST_Command
-
-
-  case class AST_B_BinaryExpression(tOperator: B_BinaryOperator,
-                                    tExpressionA: AST_B_Expression,
-                                    tExpressionB: AST_B_Expression) extends AST_B_Expression
-
-  case class AST_B_ComparatorExpression(tOperator: A_Comparator,
-                                        tExpressionA: AST_A_Expression,
-                                        tExpressionB: AST_A_Expression) extends AST_B_Expression
-
-  case class AST_B_UnaryExpression(tOperator: B_UnaryOperator, tExpression: AST_B_Expression) extends AST_B_Expression
-
-  case class AST_B_Value(tValue: Boolean) extends AST_B_Expression
-
-
-  case class AST_A_BinaryExpression(tOperator: A_BinaryOperator,
-                                    tExpressionA: AST_A_Expression,
-                                    tExpressionB: AST_A_Expression) extends AST_A_Expression
-
-  case class AST_A_UnaryExpression(tOperator: A_UnaryOperator, tExpression: AST_A_Expression) extends AST_A_Expression
-
-  case class AST_A_Variable(tName: String) extends AST_A_Expression
-
-  case class AST_A_Value(tValue: Int) extends AST_A_Expression
-
-
-  case class CFG(graph: CFGGraph, labels: Map[Int, AST_Command]) {
-
-    private val cfg = this
-
-    class CFGTraverser(label: Int, state: State) extends Traversable[CFGGraph#NodeT] {
-      override def foreach[U](f: CFGGraph#NodeT => U): Unit = exec(cfg, label, state, f)
-
-      def exec[U](cfg: CFG, label: Int, state: State, f: CFGGraph#NodeT => U): State = {
-        val node = cfg.graph get label
-        f(node)
-        cfg.labels.getOrElse(label, AST_Skip()) match {
-          case AST_If(cond, _, _) =>
-            val next = cfg.next(label, Utils.eval(cond, state).toString).get
-            exec[U](cfg, next, state, f)
-          case AST_While(cond, _) =>
-            val next = cfg.next(label, Utils.eval(cond, state).toString).get
-            exec[U](cfg, next, state, f)
-          case other =>
-            cfg.next(label, "") match {
-              case Some(next) => exec[U](cfg, next, Utils.exec(other, state), f)
-              case None => state
-            }
-        }
-      }
-    }
-
-    def getAST(label: Int): AST = labels.getOrElse(label, AST_Skip())
-
-    def exec(label: Int, state: State) = new CFGTraverser(label, state)
-
-    def extend(graph2: CFGGraph, labels2: Map[Int, AST_Command]): CFG =
-      CFG(graph ++ graph2, labels ++ labels2)
-
-    def extend(cfg2: CFG): CFG =
-      this.extend(cfg2.graph, cfg2.labels)
-
-    def mapOp(op: Map[Int, AST_Command] => Map[Int, AST_Command]): CFG =
-      CFG(graph, op(labels))
-
-    def graphOp(op: CFGGraph => CFGGraph): CFG =
-      CFG(op(graph), labels)
-
-    def nodeToString(i: Int): String = labels.get(i) match {
-      case Some(cmd) => i + " " + cmd.toString.split('\n').apply(0)
-      case None => i + " _"
-    }
-
-    def next(source: Int, path: String): Option[Int] =
-      this.graph.get(source).edges.find(e => e.edge match {
-        case LDiEdge(from, _, lbl) if lbl == path && from == source => true
-        case _ => false
-      }).map(_.to.value)
-
-    def edgeToString(i1: Int, i2: Int): Option[String] = labels.get(i1) match {
-      case Some(AST_If(_, _, _)) => i2 - i1 match {
-        case 1 => Some("then")
-        case _ => Some("else")
-      }
-      case Some(AST_While(_, _)) => i2 - i1 match {
-        case 1 => Some("do")
-        case _ => Some("else")
-      }
-      case _ => None
-    }
-  }
-
-  object CFG {
-    def empty(): CFG = {
-      new CFG(Graph(), Map())
-    }
-  }
 
   object Utils {
 
-    def ASTtoString(exp: AST): String = exp match {
-      case AST_A_Value(tValue) => tValue.toString
-      case AST_A_Variable(tName) => tName
-      case AST_Assign(tVariable, tValue) => ASTtoString(tVariable) + " := " + ASTtoString(tValue)
-      case AST_Sequence(seq) => ("" /: seq) ((s, cmd) => s + "\n" + ASTtoString(cmd))
-      case AST_If(tCondition, tThen, tElse) =>
-        s"if (${ASTtoString(tCondition)})\nthen\n${ASTtoString(tThen)}\nelse\n${ASTtoString(tElse)}\nend if"
-      case AST_B_BinaryExpression(op, a, b) =>
-        ASTtoString(a) + (op match {
-          case Or_Operator => "|"
-          case And_Operator => "&"
-        }) + ASTtoString(b)
-      case AST_B_UnaryExpression(op, e) => {
-        (op match {
-          case Not_Operator => "!"
-        }) + ASTtoString(e)
-      }
-      case AST_While(tCondition, tExpression) =>
-        s"while (${ASTtoString(tCondition)})\ndo\n${ASTtoString(tExpression)}\nend while"
-      case AST_B_ComparatorExpression(tOperator, a, b) =>
-        ASTtoString(a) + (tOperator match {
-          case Greater_Equal_Comparator => ">="
-          case Greater_Comparator => ">"
-          case Less_Equal_Comparator => "<="
-          case Less_Comparator => "<"
-          case Equal_Comparator => "="
-        }) + ASTtoString(b)
-      case AST_A_UnaryExpression(op, e) => (op match {
-        case Less_Operator => "-"
-      }) + ASTtoString(e)
-      case AST_A_BinaryExpression(op, a, b) =>
-        ASTtoString(a) + (op match {
-          case Less_Operator => "-"
-          case Plus_Operator => "+"
-          case Div_Operator => "/"
-          case Times_Operator => "*"
-        }) + ASTtoString(b)
-      case AST_B_Value(v) => v.toString
-      case AST_Skip() => "skip"
-      case _ => ""
-    }
-
-    def eval(exp: AST_B_Expression, state: State): Boolean = exp match {
-      case AST_B_Value(v) => v
-      case AST_B_BinaryExpression(op, a, b) => op match {
-        case Or_Operator => eval(a, state) || eval(b, state)
-        case And_Operator => eval(a, state) && eval(b, state)
-      }
-      case AST_B_UnaryExpression(op, e) => op match {
-        case Not_Operator => !eval(e, state)
-      }
-      case AST_B_ComparatorExpression(op, a, b) => op match {
-        case Greater_Equal_Comparator => eval(a, state) >= eval(b, state)
-        case Greater_Comparator => eval(a, state) > eval(b, state)
-        case Less_Equal_Comparator => eval(a, state) <= eval(b, state)
-        case Less_Comparator => eval(a, state) < eval(b, state)
-        case Equal_Comparator => eval(a, state) == eval(b, state)
-      }
-    }
-
-    def eval(exp: AST_A_Expression, state: State): Int = exp match {
-      case AST_A_Value(v) => v
-      case AST_A_Variable(name) => state.get(name)
-      case AST_A_BinaryExpression(op, a, b) => op match {
-        case Plus_Operator => eval(a, state) + eval(b, state)
-        case Less_Operator => eval(a, state) - eval(b, state)
-        case Times_Operator => eval(a, state) * eval(b, state)
-        case Div_Operator => eval(a, state) / eval(b, state)
-      }
-      case AST_A_UnaryExpression(op, e) => op match {
-        case Less_Operator => -eval(e, state)
-      }
-    }
-
-    def exec(exp: AST_Command, state: State): State = exp match {
-      case AST_Skip() => state
-      case AST_If(tCondition, tThen, tElse) =>
-        if (eval(tCondition, state))
-          exec(tThen, state)
-        else
-          exec(tElse, state)
-      case AST_Sequence(seq) =>
-        (state /: seq) ((st: State, ast: AST_Command) => exec(ast, st))
-      case AST_While(tCondition, tExpression) =>
-        if (eval(tCondition, state))
-          exec(exp, exec(tExpression, state))
-        else
-          state
-      case AST_Assign(tVariable, tExpression) =>
-        state.set(tVariable.tName, eval(tExpression, state))
-    }
-
-    def exec(cfg: CFG, label: Int, state: State): State = cfg.labels.getOrElse(label, AST_Skip()) match {
-      case AST_If(cond, _, _) =>
-        val next = cfg.next(label, eval(cond, state).toString).get
-        exec(cfg, next, state)
-      case AST_While(cond, _) =>
-        val next = cfg.next(label, eval(cond, state).toString).get
-        exec(cfg, next, state)
-      case other =>
-        cfg.next(label, "") match {
-          case Some(next) => exec(cfg, next, exec(other, state))
-          case None => state
-        }
-    }
-
-    def execFold[T](init: T)(cfg: CFG, label: Int, state: State, lambda: (T, CFGGraph#NodeT) => T): (State, T) = {
-      val (futureState, agg) = cfg.labels.getOrElse(label, AST_Skip()) match {
-        case AST_If(cond, _, _) =>
-          val next = cfg.next(label, eval(cond, state).toString).get
-          execFold(init)(cfg, next, state, lambda)
-        case AST_While(cond, _) =>
-          val next = cfg.next(label, eval(cond, state).toString).get
-          execFold(init)(cfg, next, state, lambda)
-        case other =>
-          cfg.next(label, "") match {
-            case Some(next) => execFold(init)(cfg, next, exec(other, state), lambda)
-            case None => (state, init)
-          }
-      }
-      (futureState, lambda(agg, cfg.graph get label))
-    }
-
-
-    def execCollectNodes(cfg: CFG,
-                         label: Int,
-                         state: State,
-                         criterion: CFGGraph#NodeT => Boolean): (State, Set[CFGGraph#NodeT]) =
-      execFold[Set[CFGGraph#NodeT]](Set())(
-        cfg,
-        label,
-        state,
-        (set, node) => if (criterion(node)) set + node else set
-      )
-
-    def ASTtoCFG_aux(exp: AST_Command, i: Int): (CFG, Int, List[Int]) = exp match {
-      case AST_If(_, tThen, tElse) =>
-        val (tThenCfg, firstElseI, thenOuts) = ASTtoCFG_aux(tThen, i + 1)
-        val (tElseCfg, availableI, elseOuts) = ASTtoCFG_aux(tElse, firstElseI)
-        (
-          tThenCfg
-            .extend(tElseCfg)
-            .graphOp(_
-              + (i ~+> (i + 1)) ("true")
-              + (i ~+> firstElseI) ("false")
-              -- thenOuts.map(outI => (outI ~+> firstElseI) (""))
-              ++ thenOuts.map(outI => (outI ~+> availableI) (""))
-            )
-            .mapOp(_ + (i -> exp)),
-          availableI, thenOuts ++ elseOuts
-        )
-      case AST_Skip() => (CFG(Graph((i ~+> (i + 1)) ("")), Map(i -> exp)), i + 1, List(i))
-      case AST_Assign(_, _) =>
-        (
-          CFG(
-            Graph((i ~+> (i + 1)) ("")),
-            Map(i -> exp)
-          ),
-          i + 1,
-          List(i)
-        )
-      case AST_Sequence(seq) =>
-        ((CFG.empty(), i, List(i)) /: seq) {
-          case ((accCfg, accI, _), cmd) =>
-            val (subCfg, subNextI, _) = ASTtoCFG_aux(cmd, accI)
-            (
-              accCfg
-                .extend(subCfg)
-                .graphOp(_ + (accI ~+> (accI + 1)) (""))
-                .mapOp(_ + (accI -> cmd)),
-              subNextI,
-              List(accI)
-            )
-        }
-      case AST_While(tCondition, tExpression) =>
-        val (tExpCfg, tExpi, outs) = ASTtoCFG_aux(tExpression, i + 1)
-        (
-          tExpCfg
-            .graphOp(_
-              + (i ~+> (i + 1)) ("true")
-              + (i ~+> tExpi) ("false")
-              ++ outs.map(outI => (outI ~+> i) (""))
-              -- outs.map(outI => (outI ~+> tExpi) (""))
-            )
-            .mapOp(_ + (i -> exp)),
-          tExpi,
-          List(i)
-        )
-    }
-
-    def ASTtoCFG(exp: AST_Command): CFG = ASTtoCFG_aux(exp, 0)._1
-
-    def replace(exp: AST_A_Variable, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_A_Variable = exp match {
-      case AST_A_Variable(searchVar.tName) => newVar
-      case AST_A_Variable(_) => exp
-    }
-
-    def replace(exp: AST_A_Expression, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_A_Expression = exp match {
-      case variable@AST_A_Variable(_) => replace(variable, searchVar, newVar)
-      case value@AST_A_Value(_) => value
-      case AST_A_UnaryExpression(op, e) =>
-        AST_A_UnaryExpression(op, replace(e, searchVar, newVar))
-      case AST_A_BinaryExpression(op, a, b) =>
-        AST_A_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
-    }
-
-    def replace(exp: AST_B_Expression, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_B_Expression = exp match {
-      case AST_B_ComparatorExpression(comp, a, b) =>
-        AST_B_ComparatorExpression(comp, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
-      case AST_B_BinaryExpression(op, a, b) =>
-        AST_B_BinaryExpression(op, replace(a, searchVar, newVar), replace(b, searchVar, newVar))
-      case AST_B_UnaryExpression(op, e) =>
-        AST_B_UnaryExpression(op, replace(e, searchVar, newVar))
-      case AST_B_Value(_) => exp
-    }
-
-    def replace(exp: AST_Command, searchVar: AST_A_Variable, newVar: AST_A_Variable): AST_Command = exp match {
-      case AST_If(cond, tThen, tElse) =>
-        AST_If(replace(cond, searchVar, newVar), replace(tThen, searchVar, newVar), replace(tElse, searchVar, newVar))
-      case AST_While(cond, expr) =>
-        AST_While(replace(cond, searchVar, newVar), replace(expr, searchVar, newVar))
-      case skip@AST_Skip() => skip
-      case AST_Sequence(seq) =>
-        AST_Sequence(seq.map(cmd => replace(cmd, searchVar, newVar)))
-      case AST_Assign(tVariable, tValue) =>
-        AST_Assign(replace(tVariable, searchVar, newVar), replace(tValue, searchVar, newVar))
-    }
 
     def execCollectLabels(cfg: CFG, state: State): Set[Int] =
-      graph.exec(0, state).map(_.value).toSet
+      cfg.exec(0, state).map(_.value).toSet
 
 
     def requiredNodesAllAssign(cfg: CFG): Set[Int] =
       cfg.labels.filter {
-        case (_, AST_Assign(_, _)) => true
+        case (_, AST.Assign(_, _)) => true
         case _ => false
       }.keys.toSet
 
@@ -460,15 +71,15 @@ object main extends App {
     }
 
     def isWhile(cfg: CFG, label: Int): Boolean = {
-      cfg.labels.getOrElse(label, AST_Skip()) match {
-        case AST_While(_, _) => true
+      cfg.labels.getOrElse(label, AST.Skip()) match {
+        case AST.While(_, _) => true
         case _ => false
       }
     }
 
     def isAssign(cfg: CFG, label: Int): Boolean = {
-      cfg.labels.getOrElse(label, AST_Skip()) match {
-        case AST_Assign(_, _) => true
+      cfg.labels.getOrElse(label, AST.Skip()) match {
+        case AST.Assign(_, _) => true
         case _ => false
       }
     }
@@ -494,28 +105,9 @@ object main extends App {
       iLoopPathsAux2(cfg, label, Vector(label), i, loopStates)
     }
 
-    def isDef(cmd: AST, variable: AST_A_Variable): Boolean =
-      cmd match {
-        case AST_Assign(tVar, _) if tVar.tName == variable.tName => true
-        case _ => false
-      }
 
-    def isRef(cmd: AST, variable: AST_A_Variable): Boolean =
-      cmd match {
-        case AST_A_Variable(tName) if tName == variable.tName => true
-        case AST_A_Variable(tName) if tName != variable.tName => false
-        case AST_A_Value(_) => false
-        case AST_A_UnaryExpression(_, e) => isRef(e, variable)
-        case AST_A_BinaryExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
-        case AST_B_UnaryExpression(_, e) => isRef(e, variable)
-        case AST_B_BinaryExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
-        case AST_B_ComparatorExpression(_, a, b) => isRef(a, variable) || isRef(b, variable)
-        case AST_B_Value(_) => false
-        case AST_If(a, _, _) => isRef(a, variable)
-        case AST_While(a, _) => isRef(a, variable)
-        case AST_Skip() => false
-        case AST_Assign(_, tValue) => isRef(tValue, variable)
-      }
+
+
 
     def forwardPathBuilderAux[P](cfg: CFG, label: Int,
                                  path: Vector[Int], i: Int,
@@ -563,12 +155,12 @@ object main extends App {
         })
         .foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
 
-    def allDefinitionsAux(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
-      def lambda(nextNodeLabel: Int, localVariable: AST_A_Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST_A_Variable) = {
+    def allDefinitionsAux(cfg: CFG, label: Int, variable: AST.A.Expression.Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
+      def lambda(nextNodeLabel: Int, localVariable: AST.A.Expression.Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST.A.Expression.Variable) = {
         val cmd = cfg.getAST(nextNodeLabel)
         if (!cfg.labels.contains(nextNodeLabel)) (Some(Set[Vector[Int]]()), localVariable)
-        else if (isRef(cmd, localVariable)) (Some(Set(path :+ nextNodeLabel)), localVariable)
-        else if (isDef(cmd, localVariable)) (Some(Set[Vector[Int]]()), localVariable)
+        else if (cmd.isRef(localVariable)) (Some(Set(path :+ nextNodeLabel)), localVariable)
+        else if (cmd.isDef(localVariable)) (Some(Set[Vector[Int]]()), localVariable)
         else (None, variable)
       }
 
@@ -580,28 +172,28 @@ object main extends App {
       cfg.labels
         .filterKeys(isAssign(cfg, _))
         .map {
-          case (label: Int, AST_Assign(tVariable, _)) =>
+          case (label: Int, AST.Assign(tVariable, _)) =>
             label -> allDefinitionsAux(cfg, label, tVariable, Vector(label), maxLoopDepth)
         }
     }
 
-    def allUsagesAux(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int]): Set[Vector[Int]] =
+    def allUsagesAux(cfg: CFG, label: Int, variable: AST.A.Expression.Variable, path: Vector[Int]): Set[Vector[Int]] =
       cfg
         .graph
         .get(label)
         .diPredecessors
         .map(node => {
           val cmd = cfg.getAST(node.value)
-          if (isDef(cmd, variable)) Set(node.value +: path)
+          if (cmd.isDef(variable)) Set(node.value +: path)
           else if (node.value == 0) Set[Vector[Int]]()
           else allUsagesAux(cfg, node.value, variable, node.value +: path)
         })
         .foldLeft[Set[Vector[Int]]](Set[Vector[Int]]())((a, b) => a ++ b)
 
-    def allUsagesAux2(cfg: CFG, label: Int, variable: AST_A_Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
-      def lambda(nextNodeLabel: Int, localVariable: AST_A_Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST_A_Variable) = {
+    def allUsagesAux2(cfg: CFG, label: Int, variable: AST.A.Expression.Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
+      def lambda(nextNodeLabel: Int, localVariable: AST.A.Expression.Variable, path: Vector[Int]): (Option[Set[Vector[Int]]], AST.A.Expression.Variable) = {
         val cmd = cfg.getAST(nextNodeLabel)
-        if (isDef(cmd, variable)) (Some(Set(nextNodeLabel +: path)), localVariable)
+        if (cmd.isDef(variable)) (Some(Set(nextNodeLabel +: path)), localVariable)
         else if (nextNodeLabel == 0) (Some(Set[Vector[Int]]()), localVariable)
         else (None, localVariable)
       }
@@ -610,17 +202,17 @@ object main extends App {
       backwardPathBuilderAux(cfg, label, Vector(label), maxLoopExec, loopStates, variable, lambda)
     }
 
-    def DUPaths(cfg: CFG, maxLoopDepth: Int): Map[AST_A_Variable, Map[Int, Set[Vector[Int]]]] = {
+    def DUPaths(cfg: CFG, maxLoopDepth: Int): Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = {
       val variables =
         cfg
           .labels
           .values
           .filter {
-            case AST_Assign(_, _) => true
+            case AST.Assign(_, _) => true
             case _ => false
           }
           .map {
-            case AST_Assign(a, _) => a
+            case AST.Assign(a, _) => a
           }
           .toSet
 
@@ -630,7 +222,7 @@ object main extends App {
             cfg
               .labels
               .filter {
-                case (_, cmd) => isRef(cmd, variable)
+                case (_, cmd) => cmd.isRef(variable)
               }
               .map {
                 case (lbl, _) => lbl
@@ -654,27 +246,27 @@ object main extends App {
       usagePaths
     }
 
-    def replaceVariables(cmd: AST_Command, variables: Map[AST_A_Variable, Int]): AST_Command =
+    def replaceVariables(cmd: AST.Command, variables: Map[AST.A.Expression.Variable, Int]): AST.Command =
       (cmd /: variables) {
-        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+        case (accCmd, (tVar, tIdx)) => accCmd.replace(tVar, AST.A.Expression.Variable(tVar + "_" + tIdx.toString))
       }
 
-    def replaceVariables(cmd: AST_A_Expression, variables: Map[AST_A_Variable, Int]): AST_A_Expression =
+    def replaceVariables(cmd: AST.A.Expression, variables: Map[AST.A.Expression.Variable, Int]): AST.A.Expression =
       (cmd /: variables) {
-        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+        case (accCmd, (tVar, tIdx)) => accCmd.replace(tVar, AST.A.Expression.Variable(tVar + "_" + tIdx.toString))
       }
 
-    def replaceVariables(cmd: AST_B_Expression, variables: Map[AST_A_Variable, Int]): AST_B_Expression =
+    def replaceVariables(cmd: AST.B.Expression, variables: Map[AST.A.Expression.Variable, Int]): AST.B.Expression =
       (cmd /: variables) {
-        case (accCmd, (tVar, tIdx)) => replace(accCmd, tVar, AST_A_Variable(tVar + "_" + tIdx.toString))
+        case (accCmd, (tVar, tIdx)) => accCmd.replace(tVar, AST.A.Expression.Variable(tVar + "_" + tIdx.toString))
       }
 
-    def BuildConstraintsAux(cfg: CFG, path: Vector[Int], idx: Int, variableCounters: Map[AST_A_Variable, Int]): List[AST_B_Expression] =
+    def BuildConstraintsAux(cfg: CFG, path: Vector[Int], idx: Int, variableCounters: Map[AST.A.Expression.Variable, Int]): List[AST.B.Expression] =
       if (idx == path.length)
-        List(AST_B_Value(true))
+        List(AST.B.Expression.Value(true))
       else {
-        val newVariableCounters: Map[AST_A_Variable, Int] = cfg.getAST(path(idx)) match {
-          case AST_Assign(tVariable, _) =>
+        val newVariableCounters: Map[AST.A.Expression.Variable, Int] = cfg.getAST(path(idx)) match {
+          case AST.Assign(tVariable, _) =>
             variableCounters + (
               if (variableCounters.contains(tVariable))
                 tVariable -> (variableCounters(tVariable) + 1)
@@ -685,149 +277,103 @@ object main extends App {
         }
 
         (cfg.getAST(path(idx)) match {
-          case AST_Assign(tVariable, tValue) =>
-            AST_B_ComparatorExpression(
-              Equal_Comparator,
+          case AST.Assign(tVariable, tValue) =>
+            AST.B.Expression.Comparator(
+              AST.A.Comparator.Equal,
               replaceVariables(tVariable, newVariableCounters),
               replaceVariables(tValue, variableCounters)
             )
-          case AST_If(tCondition, _, _) =>
+          case AST.If(tCondition, _, _) =>
             cfg.next(path(idx), "true") match {
               case Some(nxt) if nxt == path(idx + 1) => replaceVariables(tCondition, variableCounters)
-              case _ => AST_B_UnaryExpression(Not_Operator, replaceVariables(tCondition, variableCounters))
+              case _ => AST.B.Expression.Unary(AST.B.Operator.Not, replaceVariables(tCondition, variableCounters))
             }
-          case AST_While(tCondition, _) =>
+          case AST.While(tCondition, _) =>
             cfg.next(path(idx), "true") match {
               case Some(nxt) if nxt == path(idx + 1) => replaceVariables(tCondition, variableCounters)
-              case _ => AST_B_UnaryExpression(Not_Operator, replaceVariables(tCondition, variableCounters))
+              case _ => AST.B.Expression.Unary(AST.B.Operator.Not, replaceVariables(tCondition, variableCounters))
             }
-          case _ => AST_B_Value(true)
+          case _ => AST.B.Expression.Value(true)
         }) :: BuildConstraintsAux(cfg, path, idx + 1, newVariableCounters)
       }
 
-    def identifyVariables(exp: AST_B_Expression): Vector[AST_A_Variable] =
+    def identifyVariables(exp: AST.B.Expression): Vector[AST.A.Expression.Variable] =
       exp match {
-        case AST_B_UnaryExpression(_, e) => identifyVariables(e)
-        case AST_B_BinaryExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
-        case AST_B_Value(_) => Vector()
-        case AST_B_ComparatorExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+        case AST.B.Expression.Unary(_, e) => identifyVariables(e)
+        case AST.B.Expression.Binary(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+        case AST.B.Expression.Value(_) => Vector()
+        case AST.B.Expression.Comparator(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
       }
 
-    def identifyVariables(exp: AST_A_Expression): Vector[AST_A_Variable] =
+    def identifyVariables(exp: AST.A.Expression): Vector[AST.A.Expression.Variable] =
       exp match {
-        case AST_A_BinaryExpression(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
-        case AST_A_UnaryExpression(_, a) => identifyVariables(a)
-        case tVar: AST_A_Variable => Vector(tVar)
-        case AST_A_Value(_) => Vector()
+        case AST.A.Expression.Binary(_, a, b) => identifyVariables(a) ++ identifyVariables(b)
+        case AST.A.Expression.Unary(_, a) => identifyVariables(a)
+        case tVar: AST.A.Expression.Variable => Vector(tVar)
+        case AST.A.Expression.Value(_) => Vector()
       }
 
-    def BuildConstraints(cfg: CFG, path: Vector[Int]): List[AST_B_Expression] = {
+    def BuildConstraints(cfg: CFG, path: Vector[Int]): List[AST.B.Expression] = {
       BuildConstraintsAux(cfg, path, 0, Map())
-    }
-
-    def constrainifyB(model: Model, cmd: AST_B_Expression, variables: Map[String, IntVar]): BoolVar = cmd match {
-      case AST_B_ComparatorExpression(op, a, b) =>
-        val av = constrainifyA(model, a, variables)
-        val bv = constrainifyA(model, b, variables)
-        op match {
-          case Equal_Comparator => av.eq(bv).boolVar()
-          case Less_Comparator => av.lt(bv).boolVar()
-          case Less_Equal_Comparator => av.le(bv).boolVar()
-          case Greater_Comparator => av.gt(bv).boolVar()
-          case Greater_Equal_Comparator => av.ge(bv).boolVar()
-        }
-      case AST_B_BinaryExpression(op, a, b) =>
-        val av = constrainifyB(model, a, variables)
-        val bv = constrainifyB(model, b, variables)
-        op match {
-          case And_Operator => av.and(bv).boolVar()
-          case Or_Operator => av.or(bv).boolVar()
-        }
-      case AST_B_UnaryExpression(op, a) =>
-        val av = constrainifyB(model, a, variables)
-        op match {
-          case Not_Operator => av.not().boolVar()
-        }
-      case AST_B_Value(tValue) =>
-        model.boolVar(tValue)
-    }
-
-    def constrainifyA(model: Model, cmd: AST_A_Expression, variables: Map[String, IntVar]): IntVar = cmd match {
-      case AST_A_Variable(tName) => variables(tName)
-      case AST_A_Value(tValue) => model.intVar(tValue)
-      case AST_A_BinaryExpression(op, a, b) =>
-        val av = constrainifyA(model, a, variables)
-        val bv = constrainifyA(model, b, variables)
-        op match {
-          case Plus_Operator => av.add(bv).intVar()
-          case Less_Operator => av.sub(bv).intVar()
-          case Times_Operator => av.mul(bv).intVar()
-          case Div_Operator => av.div(bv).intVar()
-        }
-      case AST_A_UnaryExpression(op, a) =>
-        val av = constrainifyA(model, a, variables)
-        op match {
-          case Less_Operator => model.intVar(0).sub(av).intVar()
-        }
     }
 
   }
 
-  val tree = AST_Sequence(List(
-    AST_If(
-      AST_B_ComparatorExpression(Less_Equal_Comparator, AST_A_Variable("X"), AST_A_Value(0)),
-      AST_Assign(AST_A_Variable("X"), AST_A_UnaryExpression(Less_Operator, AST_A_Variable("X"))),
-      AST_Assign(AST_A_Variable("X"), AST_A_BinaryExpression(Less_Operator, AST_A_Value(1), AST_A_Variable("X")))
+  val tree = AST.Sequence(List(
+    AST.If(
+      AST.B.Expression.Comparator(AST.A.Comparator.LessEqual, AST.A.Expression.Variable("X"), AST.A.Expression.Value(0)),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Unary(AST.A.Operator.Less, AST.A.Expression.Variable("X"))),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Binary(AST.A.Operator.Less, AST.A.Expression.Value(1), AST.A.Expression.Variable("X")))
     ),
-    AST_If(
-      AST_B_ComparatorExpression(Equal_Comparator, AST_A_Variable("X"), AST_A_Value(1)),
-      AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
-      AST_Assign(AST_A_Variable("X"), AST_A_BinaryExpression(Plus_Operator, AST_A_Value(1), AST_A_Variable("X")))
+    AST.If(
+      AST.B.Expression.Comparator(AST.A.Comparator.Equal, AST.A.Expression.Variable("X"), AST.A.Expression.Value(1)),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Value(1)),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Binary(AST.A.Operator.Plus, AST.A.Expression.Value(1), AST.A.Expression.Variable("X")))
     ),
   ))
 
-  val tree2 = AST_Sequence(List(
-    AST_While(AST_B_Value(true),
-      AST_If(AST_B_Value(true),
-        AST_Sequence(
+  val tree2 = AST.Sequence(List(
+    AST.While(AST.B.Expression.Value(true),
+      AST.If(AST.B.Expression.Value(true),
+        AST.Sequence(
           List(
-            AST_Skip(),
-            AST_Skip()
+            AST.Skip(),
+            AST.Skip()
           )
         ),
-        AST_Skip()
+        AST.Skip()
       )
     )
   ))
 
-  val tree3 = AST_Sequence(List(
-    AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
-    AST_If(
-      AST_B_ComparatorExpression(Equal_Comparator, AST_A_Variable("Y"), AST_A_Value(0)),
-      AST_Assign(AST_A_Variable("X"), AST_A_Value(2)),
-      AST_Assign(AST_A_Variable("X"), AST_A_Value(3))
+  val tree3 = AST.Sequence(List(
+    AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Value(1)),
+    AST.If(
+      AST.B.Expression.Comparator(AST.A.Comparator.Equal, AST.A.Expression.Variable("Y"), AST.A.Expression.Value(0)),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Value(2)),
+      AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Value(3))
     ),
-    AST_Assign(AST_A_Variable("Y"), AST_A_Variable("X"))
+    AST.Assign(AST.A.Expression.Variable("Y"), AST.A.Expression.Variable("X"))
   ))
 
-  val tree4 = AST_Sequence(List(
-    AST_Assign(AST_A_Variable("X"), AST_A_Value(1)),
-    AST_While(
-      AST_B_Value(false),
-      AST_Assign(AST_A_Variable("Y"), AST_A_Value(2)),
+  val tree4 = AST.Sequence(List(
+    AST.Assign(AST.A.Expression.Variable("X"), AST.A.Expression.Value(1)),
+    AST.While(
+      AST.B.Expression.Value(false),
+      AST.Assign(AST.A.Expression.Variable("Y"), AST.A.Expression.Value(2)),
     ),
-    AST_Assign(AST_A_Variable("Y"), AST_A_Variable("X")),
-    AST_Assign(AST_A_Variable("Z"), AST_A_Variable("X"))
+    AST.Assign(AST.A.Expression.Variable("Y"), AST.A.Expression.Variable("X")),
+    AST.Assign(AST.A.Expression.Variable("Z"), AST.A.Expression.Variable("X"))
   ))
 
-  val graph = Utils.ASTtoCFG(tree4)
+  val graph = tree4.toCFG
 
   val dotRoot = DotRootGraph(
     directed = true,
     id = Some("CFG")
   )
 
-  def edgeTransformer(innerEdge: CFGGraph#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
+  def edgeTransformer(innerEdge: CFG.GraphType#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
     case LDiEdge(source, target, value: String) =>
       Some((dotRoot, DotEdgeStmt(
         graph.nodeToString(source.value),
@@ -865,17 +411,8 @@ object main extends App {
         }
     }
 
-    def varFirst(a: Either[Int, IntVar], b: Either[Int, IntVar]): (IntVar, Either[Int, IntVar]) = a match {
-      case Left(_) => b match {
-        case Right(v) => (v, a)
-      }
-      case Right(v) => (v, b)
-    }
-
-
-
-    constraints.foreach((exp: AST_B_Expression) => {
-      val constraint = Utils.constrainifyB(model, exp, variables).eq(model.boolVar(true))
+    constraints.foreach((exp: AST.B.Expression) => {
+      val constraint = exp.toConstraintVar(model, variables).eq(model.boolVar(true))
       println(exp)
       constraint.post()
     }
