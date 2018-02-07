@@ -1,7 +1,11 @@
 package IVF
 
+import IVF.main.Utils.isWhile
+
 import scalax.collection.Graph
 import scalax.collection.edge.LDiEdge
+import scalax.collection.GraphEdge._
+import scalax.collection.edge.Implicits._
 
 case class State(values: Map[String, Int]) {
   def get(key: String): Int = this.values(key)
@@ -81,4 +85,72 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
     }
     case _ => None
   }
+
+  def emptyLoopStates: Map[Int, Int] = cfg.labels.keys.filter(cfg.isWhile).map(_ -> 0).toMap
+
+  def fillPathUp(path: Vector[Int], maxLoopExec: Int): Vector[Vector[Int]] = {
+    cfg.backwardPathBuilderAux[None.type](path(0), Vector(), maxLoopExec, cfg.emptyLoopStates, None, (_, _, _) => (None, None))
+      .map(vector => vector ++ path).toVector
+  }
+
+  def isWhile(label: Int): Boolean = {
+    cfg.labels.getOrElse(label, AST.Skip()) match {
+      case AST.While(_, _) => true
+      case _ => false
+    }
+  }
+
+  def isAssign(label: Int): Boolean = {
+    cfg.labels.getOrElse(label, AST.Skip()) match {
+      case AST.Assign(_, _) => true
+      case _ => false
+    }
+  }
+
+
+  def forwardPathBuilderAux[P](label: Int,
+                               path: Vector[Int], i: Int,
+                               loopStates: Map[Int, Int],
+                               param: P,
+                               lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+    if (!cfg.labels.contains(label)) Set(path)
+    else if (!loopStates.values.forall(amt => amt <= i)) Set()
+    else cfg.graph.get(label)
+      .diSuccessors
+      .map(node => {
+        val newLoopStates = if (cfg.isWhile(node.value) && label < node.value) {
+          loopStates + (node.value -> 0)
+        } else if (cfg.isWhile(label) && cfg.graph.find((label ~+> node.value) ("true")).nonEmpty) {
+          loopStates + (label -> (loopStates(label) + 1))
+        } else loopStates
+        val (res, nextParam) = lambda(node.value, param, path)
+        res match {
+          case Some(set) => set
+          case None => cfg.forwardPathBuilderAux[P](node.value, path :+ node.value, i, newLoopStates, nextParam, lambda)
+        }
+      }
+      )
+      .reduce((a, b) => a ++ b)
+
+  def backwardPathBuilderAux[P](label: Int,
+                                path: Vector[Int], i: Int,
+                                loopStates: Map[Int, Int], param: P,
+                                lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
+    if (label == 0) Set(path)
+    else if (!loopStates.values.forall(amt => amt <= i + 1)) Set()
+    else cfg.graph.get(label)
+      .diPredecessors
+      .map(node => {
+        val newLoopStates = if (cfg.isWhile(label) && label > node.value) {
+          loopStates + (label -> 0)
+        } else if (cfg.isWhile(node.value) && cfg.graph.find((node.value ~+> label) ("true")).nonEmpty) {
+          loopStates + (node.value -> (loopStates(node.value) + 1))
+        } else loopStates
+        val (res, nextParam) = lambda(node.value, param, path)
+        res match {
+          case Some(set) => set
+          case None => cfg.backwardPathBuilderAux[P](node.value, node.value +: path, i, newLoopStates, nextParam, lambda)
+        }
+      })
+      .foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
 }
