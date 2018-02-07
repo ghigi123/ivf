@@ -334,18 +334,18 @@ object AST {
               List(accI)
             )
         }
-      case AST.While(tCondition, tExpression) =>
-        val (tExpCfg, tExpi, outs) = tExpression.toCFGRec(i + 1)
+      case AST.While(_, tExpression) =>
+        val (tExpCfg, tExpI, outs) = tExpression.toCFGRec(i + 1)
         (
           tExpCfg
             .graphOp(_
               + (i ~+> (i + 1)) ("true")
-              + (i ~+> tExpi) ("false")
+              + (i ~+> tExpI) ("false")
               ++ outs.map(outI => (outI ~+> i) (""))
-              -- outs.map(outI => (outI ~+> tExpi) (""))
+              -- outs.map(outI => (outI ~+> tExpI) (""))
             )
             .mapOp(_ + (i -> this)),
-          tExpi,
+          tExpI,
           List(i)
         )
     }

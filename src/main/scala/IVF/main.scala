@@ -6,12 +6,12 @@ import org.chocosolver.solver.Model
 import org.chocosolver.solver.search.strategy.Search
 import org.chocosolver.solver.variables.IntVar
 
-import scalax.collection.GraphPredef._
-import scalax.collection.edge.Implicits._
 import scalax.collection.edge.LDiEdge
 import scalax.collection.io.dot._
-import scalax.collection.io.dot.implicits._
+import scalax.collection.GraphEdge._
+import scalax.collection.edge.Implicits._
 
+import implicits._
 
 object main extends App {
 
@@ -41,7 +41,7 @@ object main extends App {
     def requiredNodesAllDecisions(cfg: CFG): Set[Int] = {
       cfg.graph.edges
         .filter { case LDiEdge(_, _, l) => l == "true" || l == "false" }
-        .map { case LDiEdge(_, t: Int, _) => t.value }
+        .map { case LDiEdge(_, t: CFG.GraphType#NodeT, _) => t.value }
         .toSet
     }
 
