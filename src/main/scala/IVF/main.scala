@@ -285,7 +285,7 @@ object main extends App {
     AST.Assign(AST.A.Expression.Variable("Z"), AST.A.Expression.Variable("Y")),
   ))
 
-  val graph = tree7.toCFG
+  val graph = tree.toCFG
 
   val dotRoot = DotRootGraph(
     directed = true,
@@ -315,7 +315,7 @@ object main extends App {
   println(dot)
 
 
-  val criterion = CriterionUtils.allDefinitionsCriterion(graph, 1)
+  val criterion = CriterionUtils.allKPathsCriterion(graph, 6)
   val tests = criterion.generateTests()
 
   tests.checkError match {

@@ -16,7 +16,7 @@ case object All extends Required
 
 case object Any extends Required
 
-sealed trait Test {
+sealed trait GenTest {
   def valid: Boolean
 
   def checkError: Option[String]
@@ -24,7 +24,7 @@ sealed trait Test {
   def flatten: Set[State]
 }
 
-case class TestState(state: State, criterion: Criterion) extends Test {
+case class GenTestState(state: State, criterion: Criterion) extends GenTest {
   override def valid: Boolean = true
 
   override def checkError: Option[String] = None
@@ -32,7 +32,7 @@ case class TestState(state: State, criterion: Criterion) extends Test {
   override def flatten: Set[State] = Set(state)
 }
 
-case class TestError(error: String, criterion: Criterion) extends Test {
+case class GenTestError(error: String, criterion: Criterion) extends GenTest {
   override def valid: Boolean = false
 
   override def checkError: Option[String] = Some(criterion.name + " -> " + error)
@@ -40,7 +40,7 @@ case class TestError(error: String, criterion: Criterion) extends Test {
   override def flatten: Set[State] = Set()
 }
 
-case class TestMap(map: Map[String, Test], required: Required, criterion: Criterion) extends Test {
+case class GenTestMap(map: Map[String, GenTest], required: Required, criterion: Criterion) extends GenTest {
   override def valid: Boolean = required match {
     case All => map.forall {
       case (_, t) => t.valid
@@ -77,23 +77,23 @@ case class TestMap(map: Map[String, Test], required: Required, criterion: Criter
 
 
 abstract class Criterion(val cfg: CFG, val name: String) {
-  def generateTests(): Test
+  def generateTests(): GenTest
 
   override def toString: String = name + ": "
 }
 
 case class CriterionMap(override val cfg: CFG, override val name: String, required: Required, criteria: Map[String, Criterion]) extends Criterion(cfg, name) {
 
-  override def generateTests(): Test = required match {
+  override def generateTests(): GenTest = required match {
     case All =>
-      TestMap(criteria.map {
+      GenTestMap(criteria.map {
         case (key, crit) => key -> crit.generateTests()
       }, All, this)
     case Any => criteria.find {
       case (_, crit) => crit.generateTests().valid
     } match {
-      case Some((key, c)) => TestMap(Map(key -> c.generateTests()), Any, this)
-      case None => TestMap(Map(), Any, this)
+      case Some((key, c)) => GenTestMap(Map(key -> c.generateTests()), Any, this)
+      case None => GenTestMap(Map(), Any, this)
     }
   }
 
@@ -103,7 +103,7 @@ case class CriterionMap(override val cfg: CFG, override val name: String, requir
 }
 
 case class PathCriterion(override val cfg: CFG, override val name: String, path: Criterion.Path) extends Criterion(cfg, name) {
-  def generateTests(): Test = {
+  def generateTests(): GenTest = {
     val constraints = Utils.BuildConstraints(cfg, path)
     val model: Model = new Model()
     val variables = (Map[String, IntVar]() /: constraints) {
@@ -125,12 +125,12 @@ case class PathCriterion(override val cfg: CFG, override val name: String, path:
 
     solver.setSearch(Search.minDomLBSearch(variables.values.toSeq: _*))
     if (solver.solve()) {
-      TestState(State(variables
+      GenTestState(State(variables
         .filterKeys(!_.contains('_'))
         .mapValues(_.getValue)
       ), this)
     } else {
-      TestError("Unable to find valid valuation for path " + path.toString, this)
+      GenTestError("Unable to find valid valuation for path " + path.toString, this)
     }
   }
 
@@ -245,29 +245,24 @@ object CriterionUtils {
 
   def allRefToDefPaths(cfg: CFG, maxLoopDepth: Int): Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = {
     val variables =
-      cfg
-        .labels
-        .values
+      cfg.labels.values
         .filter {
           case AST.Assign(_, _) => true
           case _ => false
-        }
-        .map {
-          case AST.Assign(a, _) => a
-        }
+        }.map {
+        case AST.Assign(a, _) => a
+      }
         .toSet
 
     val refs =
       variables.map { variable =>
         variable ->
-          cfg
-            .labels
+          cfg.labels
             .filter {
               case (_, cmd) => cmd.isRef(variable)
-            }
-            .map {
-              case (lbl, _) => lbl
-            }
+            }.map {
+            case (lbl, _) => lbl
+          }
       }.toMap
 
     val usagePaths = refs.map {
@@ -275,11 +270,9 @@ object CriterionUtils {
         tVar -> potentialRefs
           .map { potentialRef =>
             potentialRef -> firstDefFromRefPaths(cfg, potentialRef, tVar, Vector(potentialRef), maxLoopDepth)
-          }
-          .toMap
-          .filter {
-            case (_, set) => set.nonEmpty
-          }
+          }.toMap.filter {
+          case (_, set) => set.nonEmpty
+        }
     }
 
     usagePaths
@@ -297,14 +290,13 @@ object CriterionUtils {
       )
 
     CriterionMap(cfg, "all usages", All, extended_du_paths.map {
-      case (key, map1) =>
-        key.toString -> CriterionMap(cfg, "all_ref", All, map1.map {
-          case (refId, map2) => refId.toString -> CriterionMap(cfg, "all_def_to_ref", Any, map2.map {
-            case (defToRef, map3) => defToRef -> CriterionMap(cfg, "any_path", Any, map3.zipWithIndex.map {
-              case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
-            }.toMap)
-          })
+      case (key, map1) => key.toString -> CriterionMap(cfg, "all_ref", All, map1.map {
+        case (refId, map2) => refId.toString -> CriterionMap(cfg, "all_def_to_ref", Any, map2.map {
+          case (defToRef, map3) => defToRef -> CriterionMap(cfg, "any_path", Any, map3.zipWithIndex.map {
+            case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
+          }.toMap)
         })
+      })
     })
   }
 
@@ -320,14 +312,13 @@ object CriterionUtils {
       )
 
     CriterionMap(cfg, "all du paths", All, extended_du_paths.map {
-      case (key, map1) =>
-        key.toString -> CriterionMap(cfg, "ref", All, map1.map {
-          case (refId, map2) => refId.toString -> CriterionMap(cfg, "def_to_ref", All, map2.map {
-            case (defToRef, map3) => defToRef -> CriterionMap(cfg, "path", Any, map3.zipWithIndex.map {
-              case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
-            }.toMap)
-          })
+      case (key, map1) => key.toString -> CriterionMap(cfg, "ref", All, map1.map {
+        case (refId, map2) => refId.toString -> CriterionMap(cfg, "def_to_ref", All, map2.map {
+          case (defToRef, map3) => defToRef -> CriterionMap(cfg, "path", Any, map3.zipWithIndex.map {
+            case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
+          }.toMap)
         })
+      })
     })
   }
 }
