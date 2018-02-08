@@ -1,7 +1,5 @@
 package IVF
 
-import IVF.AST.A.Expression
-import IVF.main.Utils
 import org.chocosolver.solver.Model
 import org.chocosolver.solver.search.strategy.Search
 import org.chocosolver.solver.variables.IntVar
@@ -104,11 +102,11 @@ case class CriterionMap(override val cfg: CFG, override val name: String, requir
 
 case class PathCriterion(override val cfg: CFG, override val name: String, path: Criterion.Path) extends Criterion(cfg, name) {
   def generateTests(): GenTest = {
-    val constraints = Utils.BuildConstraints(cfg, path)
+    val constraints = Constraint.BuildConstraints(cfg, path)
     val model: Model = new Model()
     val variables = (Map[String, IntVar]() /: constraints) {
       case (accMap, exp) =>
-        (accMap /: Utils.identifyVariables(exp)) {
+        (accMap /: Constraint.identifyVariables(exp)) {
           case (accMap2, tVar) => if (accMap.contains(tVar.tName))
             accMap2
           else
@@ -279,8 +277,8 @@ object CriterionUtils {
   }
 
   def allUsagesCriterion(cfg: CFG, maxLoopDepth: Int): Criterion = {
-    val du_paths: Map[Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
-    val extended_du_paths: Map[Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
+    val du_paths: Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
+    val extended_du_paths: Map[AST.A.Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
       du_paths.mapValues(var_du_paths =>
         var_du_paths.mapValues(chunks =>
           chunks.map(chunk =>
@@ -301,8 +299,8 @@ object CriterionUtils {
   }
 
   def allDUPathsCriterion(cfg: CFG, maxLoopDepth: Int): Criterion = {
-    val du_paths: Map[Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
-    val extended_du_paths: Map[Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
+    val du_paths: Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
+    val extended_du_paths: Map[AST.A.Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
       du_paths.mapValues(var_du_paths =>
         var_du_paths.mapValues(chunks =>
           chunks.map(chunk =>
