@@ -1,10 +1,7 @@
 package IVF
 
-import IVF.main.Utils.isWhile
-
 import scalax.collection.Graph
 import scalax.collection.edge.LDiEdge
-import scalax.collection.GraphEdge._
 import scalax.collection.edge.Implicits._
 
 case class State(values: Map[String, Int]) {

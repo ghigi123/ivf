@@ -34,14 +34,14 @@ sealed abstract class AST {
         case AST.A.Comparator.Equal => "="
       }) + b.toString
     case AST.A.Expression.Unary(op, e) => (op match {
-      case AST.A.Operator.Less => "-"
+      case AST.A.Operator.Sub => "-"
     }) + e.toString
     case AST.A.Expression.Binary(op, a, b) =>
       a.toString + (op match {
-        case AST.A.Operator.Less => "-"
+        case AST.A.Operator.Sub => "-"
         case AST.A.Operator.Plus => "+"
         case AST.A.Operator.Div => "/"
-        case AST.A.Operator.Times => "*"
+        case AST.A.Operator.Mul => "*"
       }) + b.toString
     case AST.B.Expression.Value(v) => v.toString
     case AST.Skip() => "skip"
@@ -172,12 +172,12 @@ object AST {
         case A.Expression.Variable(name) => state.get(name)
         case A.Expression.Binary(op, a, b) => op match {
           case A.Operator.Plus => a.eval(state) + b.eval(state)
-          case A.Operator.Less => a.eval(state) - b.eval(state)
-          case A.Operator.Times => a.eval(state) * b.eval(state)
+          case A.Operator.Sub => a.eval(state) - b.eval(state)
+          case A.Operator.Mul => a.eval(state) * b.eval(state)
           case A.Operator.Div => a.eval(state) / b.eval(state)
         }
         case A.Expression.Unary(op, e) => op match {
-          case A.Operator.Less => -e.eval(state)
+          case A.Operator.Sub => -e.eval(state)
         }
       }
 
@@ -198,14 +198,14 @@ object AST {
           val bv = b.toConstraintVar(model, variables)
           op match {
             case A.Operator.Plus => av.add(bv).intVar()
-            case A.Operator.Less => av.sub(bv).intVar()
-            case A.Operator.Times => av.mul(bv).intVar()
+            case A.Operator.Sub => av.sub(bv).intVar()
+            case A.Operator.Mul => av.mul(bv).intVar()
             case A.Operator.Div => av.div(bv).intVar()
           }
         case A.Expression.Unary(op, a) =>
           val av = a.toConstraintVar(model, variables)
           op match {
-            case A.Operator.Less => model.intVar(0).sub(av).intVar()
+            case A.Operator.Sub => model.intVar(0).sub(av).intVar()
           }
       }
     }
@@ -236,11 +236,11 @@ object AST {
 
       sealed trait Binary
 
-      case object Plus extends Binary
+      case object Plus extends Binary with Unary
 
-      case object Less extends Binary with Unary
+      case object Sub extends Binary with Unary
 
-      case object Times extends Binary
+      case object Mul extends Binary
 
       case object Div extends Binary
 

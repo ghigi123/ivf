@@ -1,144 +1,8 @@
 package IVF
 
-import org.chocosolver.solver.Model
-import org.chocosolver.solver.search.strategy.Search
-import org.chocosolver.solver.variables.IntVar
-
 object Criterion {
-  type Path = Vector[Int]
-}
 
-sealed trait Required
-
-case object All extends Required
-
-case object Any extends Required
-
-sealed trait GenTest {
-  def valid: Boolean
-
-  def checkError: Option[String]
-
-  def flatten: Set[State]
-}
-
-case class GenTestState(state: State, criterion: Criterion) extends GenTest {
-  override def valid: Boolean = true
-
-  override def checkError: Option[String] = None
-
-  override def flatten: Set[State] = Set(state)
-}
-
-case class GenTestError(error: String, criterion: Criterion) extends GenTest {
-  override def valid: Boolean = false
-
-  override def checkError: Option[String] = Some(criterion.name + " -> " + error)
-
-  override def flatten: Set[State] = Set()
-}
-
-case class GenTestMap(map: Map[String, GenTest], required: Required, criterion: Criterion) extends GenTest {
-  override def valid: Boolean = required match {
-    case All => map.forall {
-      case (_, t) => t.valid
-    }
-    case Any => map.exists {
-      case (_, t) => t.valid
-    }
-  }
-
-  override def checkError: Option[String] = required match {
-    case All =>
-      map.mapValues(_.checkError).find {
-        case (_, Some(_)) => true
-        case (_, None) => false
-      } match {
-        case Some((k, (Some(err)))) => Some("Missing " + criterion.name + ": " + k + " -> " + err)
-        case _ => None
-      }
-    case Any =>
-      if (map.values.map(_.checkError).exists {
-        case Some(_) => false
-        case None => true
-      })
-        None
-      else Some("Unable to find any " + criterion.name)
-  }
-
-  override def flatten: Set[State] = required match {
-    case All => map.values.flatMap(_.flatten).toSet
-    case Any => Set(map.values.flatMap(_.flatten).head)
-  }
-
-}
-
-
-abstract class Criterion(val cfg: CFG, val name: String) {
-  def generateTests(): GenTest
-
-  override def toString: String = name + ": "
-}
-
-case class CriterionMap(override val cfg: CFG, override val name: String, required: Required, criteria: Map[String, Criterion]) extends Criterion(cfg, name) {
-
-  override def generateTests(): GenTest = required match {
-    case All =>
-      GenTestMap(criteria.map {
-        case (key, crit) => key -> crit.generateTests()
-      }, All, this)
-    case Any => criteria.find {
-      case (_, crit) => crit.generateTests().valid
-    } match {
-      case Some((key, c)) => GenTestMap(Map(key -> c.generateTests()), Any, this)
-      case None => GenTestMap(Map(), Any, this)
-    }
-  }
-
-  override def toString: String = super.toString + criteria.map {
-    case (key, value) => key + "->" + value.toString
-  }.mkString("\n")
-}
-
-case class PathCriterion(override val cfg: CFG, override val name: String, path: Criterion.Path) extends Criterion(cfg, name) {
-  def generateTests(): GenTest = {
-    val constraints = Constraint.BuildConstraints(cfg, path)
-    val model: Model = new Model()
-    val variables = (Map[String, IntVar]() /: constraints) {
-      case (accMap, exp) =>
-        (accMap /: Constraint.identifyVariables(exp)) {
-          case (accMap2, tVar) => if (accMap.contains(tVar.tName))
-            accMap2
-          else
-            accMap2 + (tVar.tName -> model.intVar(tVar.tName, -100, 100))
-        }
-    }
-
-    constraints.foreach((exp: AST.B.Expression) => {
-      val constraint = exp.toConstraintVar(model, variables).eq(model.boolVar(true))
-      constraint.post()
-    })
-
-    val solver = model.getSolver
-
-    solver.setSearch(Search.minDomLBSearch(variables.values.toSeq: _*))
-    if (solver.solve()) {
-      GenTestState(State(variables
-        .filterKeys(!_.contains('_'))
-        .mapValues(_.getValue)
-      ), this)
-    } else {
-      GenTestError("Unable to find valid valuation for path " + path.toString, this)
-    }
-  }
-
-  override def toString: String = "P" + path.map(_.toString).mkString("_")
-
-}
-
-object CriterionUtils {
-
-  def criterionFromRequiredNodes(cfg: CFG, maxLoopExec: Int, requiredNodes: Set[Int]): Criterion = {
+  def criterionFromRequiredNodes(cfg: CFG, maxLoopExec: Int, requiredNodes: Set[Int]): TestGenerator = {
 
     println(requiredNodes)
     val requiredPathsForNodes: Map[String, Vector[Vector[Int]]] =
@@ -149,46 +13,57 @@ object CriterionUtils {
 
     println(requiredPathsForNodes)
 
-    CriterionMap(cfg, "node_all", All,
+    TestGeneratorMap(cfg, "node_all", All,
       requiredPathsForNodes.mapValues(pathSet =>
-        CriterionMap(cfg, "path_any", Any, pathSet.zipWithIndex.map {
-          case (a, b) => b.toString -> PathCriterion(cfg, "leaf", a)
+        TestGeneratorMap(cfg, "path_any", Any, pathSet.zipWithIndex.map {
+          case (a, b) => b.toString -> PathTestGenerator(cfg, "leaf", a)
         }.toMap)
       )
     )
   }
 
-  def allAssignCriterion(cfg: CFG, maxLoopExec: Int): Criterion = {
+  def allAssignCriterion(cfg: CFG, maxLoopExec: Int): (TestGenerator, Coverage) = {
     val requiredNodes = cfg.labels.filterKeys(cfg.isAssign).keys.toSet
 
-    criterionFromRequiredNodes(cfg, maxLoopExec, requiredNodes)
+    (
+      criterionFromRequiredNodes(cfg, maxLoopExec, requiredNodes),
+      NodeCoverage(requiredNodes)
+    )
   }
 
-  def allDecisionsCriterion(cfg: CFG, maxLoopExec: Int): Criterion = {
+  def allDecisionsCriterion(cfg: CFG, maxLoopExec: Int): (TestGenerator, Coverage) = {
     val requiredNodes: Set[Int] = cfg.graph.edges
       .filter(e => e.label == "true" || e.label == "false")
       .map(e => e.to.value)
       .toSet
 
-    criterionFromRequiredNodes(cfg, maxLoopExec, requiredNodes)
+    (
+      criterionFromRequiredNodes(cfg, maxLoopExec, requiredNodes),
+      NodeCoverage(requiredNodes)
+    )
   }
 
-  def allKPathsCriterion(cfg: CFG, k: Int): Criterion = {
+  def allKPathsCriterion(cfg: CFG, k: Int): (TestGenerator, Coverage) = {
     def lambda(nextNodeLabel: Int, localK: Int, path: Vector[Int]): (Option[Set[Vector[Int]]], Int) =
       if (localK == 0)
         (Some(Set[Vector[Int]]()), localK)
       else
         (None, localK - 1)
 
-    val paths = cfg.forwardPathBuilderAux(0, Vector(0), Int.MaxValue, cfg.emptyLoopStates, k, lambda).toVector
+    val paths: Seq[Vector[Int]] = cfg.forwardPathBuilderAux(0, Vector(0), Int.MaxValue, cfg.emptyLoopStates, k, lambda).toVector
 
-    CriterionMap(cfg, "path_all", All, paths.map(path => path.toString -> PathCriterion(cfg, "leaf", path)).toMap)
+    (
+      TestGeneratorMap(cfg, "path_all", All, paths.map(path => path.toString -> PathTestGenerator(cfg, "leaf", path)).toMap),
+      PathCoverage(paths.toSet)
+    )
   }
 
-  def allILoopsCriterion(cfg: CFG, i: Int): Criterion = {
+  def allILoopsCriterion(cfg: CFG, i: Int): (TestGenerator, Coverage) = {
     val paths = cfg.forwardPathBuilderAux[None.type](0, Vector(0), i, cfg.emptyLoopStates, None, (_, _, _) => (None, None)).toVector
-    println(paths)
-    CriterionMap(cfg, "path_all", All, paths.map(path => path.toString -> PathCriterion(cfg, "leaf", path)).toMap)
+    (
+      TestGeneratorMap(cfg, "path_all", All, paths.map(path => path.toString -> PathTestGenerator(cfg, "leaf", path)).toMap),
+      PathCoverage(paths.toSet)
+    )
   }
 
   private def firstRefFromDefPaths(cfg: CFG, label: Int, variable: AST.A.Expression.Variable, path: Vector[Int], maxLoopExec: Int): Set[Vector[Int]] = {
@@ -205,7 +80,7 @@ object CriterionUtils {
   }
 
 
-  def allDefinitionsCriterion(cfg: CFG, maxLoopExec: Int): Criterion = {
+  def allDefinitionsCriterion(cfg: CFG, maxLoopExec: Int): (TestGenerator, Coverage) = {
     val pathsChunks: Map[Int, Set[Vector[Int]]] = cfg.labels
       .filterKeys(cfg.isAssign)
       .map {
@@ -218,14 +93,20 @@ object CriterionUtils {
         chunk(0).toString + "~>" + chunk.last.toString -> cfg.fillPathUp(chunk, maxLoopExec)
       ).toMap
     }
-
-    CriterionMap(cfg, "definition", All, extendedPathsChunks.map {
-      case (k, definitionPaths) => "def_" + k -> CriterionMap(cfg, "path", Any, definitionPaths.map {
-        case (chunkDef, definitionPath) => chunkDef -> CriterionMap(cfg, "path", Any, definitionPath.zipWithIndex.map {
-          case (path, m) => m.toString -> PathCriterion(cfg, "leaf", path)
-        }.toMap)
-      })
-    })
+    (
+      TestGeneratorMap(cfg, "definition", All, extendedPathsChunks.map {
+        case (k, definitionPaths) => "def_" + k -> TestGeneratorMap(cfg, "path", Any, definitionPaths.map {
+          case (chunkDef, definitionPath) => chunkDef -> TestGeneratorMap(cfg, "path", Any, definitionPath.zipWithIndex.map {
+            case (path, m) => m.toString -> PathTestGenerator(cfg, "leaf", path)
+          }.toMap)
+        })
+      }),
+      SourceTargetCoverage(pathsChunks.map { case
+        (_, chunkSet) =>
+        val pick = chunkSet.head
+        Vector(pick(0), pick.last)
+      }.toSet)
+    )
   }
 
 
@@ -276,7 +157,7 @@ object CriterionUtils {
     usagePaths
   }
 
-  def allUsagesCriterion(cfg: CFG, maxLoopDepth: Int): Criterion = {
+  def allUsagesCriterion(cfg: CFG, maxLoopDepth: Int): (TestGenerator, Coverage) = {
     val du_paths: Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
     val extended_du_paths: Map[AST.A.Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
       du_paths.mapValues(var_du_paths =>
@@ -287,18 +168,27 @@ object CriterionUtils {
         )
       )
 
-    CriterionMap(cfg, "all usages", All, extended_du_paths.map {
-      case (key, map1) => key.toString -> CriterionMap(cfg, "all_ref", All, map1.map {
-        case (refId, map2) => refId.toString -> CriterionMap(cfg, "all_def_to_ref", Any, map2.map {
-          case (defToRef, map3) => defToRef -> CriterionMap(cfg, "any_path", Any, map3.zipWithIndex.map {
-            case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
-          }.toMap)
+    (
+      TestGeneratorMap(cfg, "all usages", All, extended_du_paths.map {
+        case (key, map1) => key.toString -> TestGeneratorMap(cfg, "all_ref", All, map1.map {
+          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "all_def_to_ref", Any, map2.map {
+            case (defToRef, map3) => defToRef -> TestGeneratorMap(cfg, "any_path", Any, map3.zipWithIndex.map {
+              case (path, idx) => idx.toString -> PathTestGenerator(cfg, "leaf", path)
+            }.toMap)
+          })
         })
-      })
-    })
+      }),
+      SourceTargetCoverage(du_paths.flatMap {
+        case (_, var_paths) => var_paths.map {
+          case (_, set) =>
+            val pick = set.head
+            Vector(pick(0), pick.last)
+        }
+      }.toSet)
+    )
   }
 
-  def allDUPathsCriterion(cfg: CFG, maxLoopDepth: Int): Criterion = {
+  def allDUPathsCriterion(cfg: CFG, maxLoopDepth: Int): (TestGenerator, Coverage) = {
     val du_paths: Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = allRefToDefPaths(cfg, maxLoopDepth)
     val extended_du_paths: Map[AST.A.Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
       du_paths.mapValues(var_du_paths =>
@@ -309,14 +199,29 @@ object CriterionUtils {
         )
       )
 
-    CriterionMap(cfg, "all du paths", All, extended_du_paths.map {
-      case (key, map1) => key.toString -> CriterionMap(cfg, "ref", All, map1.map {
-        case (refId, map2) => refId.toString -> CriterionMap(cfg, "def_to_ref", All, map2.map {
-          case (defToRef, map3) => defToRef -> CriterionMap(cfg, "path", Any, map3.zipWithIndex.map {
-            case (path, idx) => idx.toString -> PathCriterion(cfg, "leaf", path)
-          }.toMap)
+    (
+      TestGeneratorMap(cfg, "all du paths", All, extended_du_paths.map {
+        case (key, map1) => key.toString -> TestGeneratorMap(cfg, "ref", All, map1.map {
+          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "def_to_ref", All, map2.map {
+            case (defToRef, map3) => defToRef -> TestGeneratorMap(cfg, "path", Any, map3.zipWithIndex.map {
+              case (path, idx) => idx.toString -> PathTestGenerator(cfg, "leaf", path)
+            }.toMap)
+          })
         })
-      })
-    })
+      }),
+      PathCoverage(du_paths.flatMap {
+        case (_, m) => m.flatMap {
+          case (_, set) => set
+        }
+      }.toSet)
+    )
   }
 }
+
+sealed abstract class Coverage
+
+case class PathCoverage(paths: Set[Vector[Int]]) extends Coverage
+
+case class SourceTargetCoverage(st: Set[Vector[Int]]) extends Coverage
+
+case class NodeCoverage(nodes: Set[Int]) extends Coverage
