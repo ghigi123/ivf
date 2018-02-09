@@ -35,6 +35,40 @@ object Sample {
               List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
               List[State](State(Map("X" -> -1)), State(Map("X" -> -2)))
             )
+          ),
+          SampleTest(
+            AllDecisionsCriterion(),
+            List(
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
+              List[State](State(Map("X" -> -1)), State(Map("X" -> -2)))
+            )
+          ),
+          SampleTest(
+            AllKPathCriterion(4),
+            List(
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
+            )
+          ),
+          SampleTest(
+            AllDefinitionsCriterion(),
+            List(
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
+            )
+          ),
+          SampleTest(
+            AllUsagesCriterion(),
+            List(
+              List[State](State(Map("X" -> 1))),
+              List[State](State(Map("X" -> -2))),
+            )
+          ),
+          SampleTest(
+            AllDUPathsCriterion(),
+            List(
+              List[State](State(Map("X" -> 1))),
+              List[State](State(Map("X" -> -2))),
+              List[State](State(Map("X" -> 1)),State(Map("X" -> -2))),
+            )
           )
         )
       ),

@@ -68,7 +68,10 @@ case class GeneratedTestMap(map: Map[String, GeneratedTest], required: Required,
 
   override def flatten: Set[State] = required match {
     case All => map.values.flatMap(_.flatten).toSet
-    case Any => Set(map.values.flatMap(_.flatten).head)
+    case Any => map.values.flatMap(_.flatten).headOption match {
+      case Some(state) => Set(state)
+      case None => Set()
+    }
   }
 
 }
@@ -128,7 +131,7 @@ case class PathTestGenerator(override val cfg: CFG, override val name: String, p
         .mapValues(_.getValue)
       ), this)
     } else {
-      GeneratedTestError("unable to solve " + constraints.mkString(" & ") + " for path " + Path(path).toString, this)
+      GeneratedTestError("unable to solve " + constraints.filter{case AST.B.Expression.Value(true) => false case _ => true }.mkString(" & ") + " for path " + Path(path).toString, this)
     }
   }
 

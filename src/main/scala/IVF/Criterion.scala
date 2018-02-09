@@ -66,7 +66,7 @@ case class AllILoopsCriterion(i: Int) extends Criterion {
   }
 }
 
-case class AllDefinitionsCriterion(maxLoopDepth: Int) extends Criterion {
+case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
   override def name: String = "all definitions"
 
   override def build(cfg: CFG): (TestGenerator, SourceTargetCoverage) = {
@@ -83,7 +83,7 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int) extends Criterion {
       ).toMap
     }
     (
-      TestGeneratorMap(cfg, "definition", All, extendedPathsChunks.map {
+      TestGeneratorMap(cfg, "definition usage", All, extendedPathsChunks.map {
         case (k, definitionPaths) => "def_" + k -> TestGeneratorMap(cfg, "path", Any, definitionPaths.map {
           case (chunkDef, definitionPath) => chunkDef -> TestGeneratorMap(cfg, "path", Any, definitionPath.zipWithIndex.map {
             case (path, m) => m.toString -> PathTestGenerator(cfg, "leaf", path)
@@ -91,15 +91,19 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int) extends Criterion {
         })
       }),
       SourceTargetCoverage(pathsChunks.map { case
-        (_, chunkSet) =>
-        val pick = chunkSet.head
-        Vector(pick(0), pick.last)
+        (source, chunkSet) =>
+        if (chunkSet.nonEmpty){
+          val pick = chunkSet.head
+          SourceTarget(Some(source), Some(pick.last))
+        } else {
+          SourceTarget(Some(source), None)
+        }
       }.toSet)
     )
   }
 }
 
-case class AllUsagesCriterion(maxLoopDepth: Int) extends Criterion {
+case class AllUsagesCriterion(maxLoopDepth: Int = 1) extends Criterion {
   override def name: String = "all usages"
 
   override def build(cfg: CFG): (TestGenerator, SourceTargetCoverage) = {
@@ -127,14 +131,14 @@ case class AllUsagesCriterion(maxLoopDepth: Int) extends Criterion {
         case (_, var_paths) => var_paths.map {
           case (_, set) =>
             val pick = set.head
-            Vector(pick(0), pick.last)
+            SourceTarget(Some(pick(0)), Some(pick.last))
         }
       }.toSet)
     )
   }
 }
 
-case class AllDUPathsCriterion(maxLoopDepth: Int) extends Criterion {
+case class AllDUPathsCriterion(maxLoopDepth: Int = 1) extends Criterion {
   override def name: String = "all du paths"
 
   override def build(cfg: CFG): (TestGenerator, PathCoverage) = {
@@ -208,7 +212,7 @@ object Criterion {
     }
 
     val loopStates = cfg.labels.keys.filter(cfg.isWhile).map(_ -> 0).toMap
-    cfg.backwardPathBuilderAux(label, Vector(label), maxLoopExec, loopStates, variable, lambda)
+    cfg.backwardPathBuilderAux(label, Vector(label), maxLoopExec, loopStates, variable, lambda).filter(_.length > 1)
   }
 
   def allRefToDefPaths(cfg: CFG, maxLoopDepth: Int): Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = {
@@ -256,6 +260,10 @@ case class Path(path: Vector[Int]) extends CoverageUnit {
   def contains(path2: Path): Boolean = path.containsSlice(path2.path)
 }
 
+case class SourceTarget(source: Option[Int], target: Option[Int]) extends CoverageUnit {
+  override def toString: String = source.map(_.toString).getOrElse("") + "~~>" + target.map(_.toString).getOrElse("")
+}
+
 case class Node(node: Int) extends CoverageUnit {
   override def toString: String = node.toString
 }
@@ -295,10 +303,39 @@ case class PathCoverage(paths: Set[Path]) extends Coverage {
   override def toString: String = s"{${paths.mkString(", ")}}"
 }
 
-case class SourceTargetCoverage(st: Set[Vector[Int]]) extends Coverage {
-  override def coverTest(cfg: CFG, states: List[State]): Option[Path] = ???
+case class SourceTargetCoverage(st: Set[SourceTarget]) extends Coverage {
+  override def coverTest(cfg: CFG, states: List[State]): Option[SourceTarget] = {
+    val traversedPaths = states.map(state =>
+      Path((Vector[Int]() /: cfg.exec(0, state)) {
+        case (accV, node) => accV :+ node.value
+      })
+    )
 
-  override def coverTestString(cfg: CFG, states: List[State]): String = ???
+    st.map{
+      case p @ SourceTarget(Some(source), Some(target))=>
+        traversedPaths.find(path=> {
+        val sourceIndexInPath = path.path.indexOf(source)
+        if(sourceIndexInPath >= 0) {
+          val targetIndexInPath = path.path.indexOf(target, sourceIndexInPath + 1)
+          targetIndexInPath >= 0
+        }
+        else false
+      }) match {
+        case Some(_) => None
+        case None => Some(p)
+      }
+      case p => Some(p)
+    }
+      .find(_.nonEmpty)
+      .flatten
+  }
+
+  override def coverTestString(cfg: CFG, states: List[State]): String =
+    this.coverTest(cfg, states) match {
+      case Some(SourceTarget(Some(source), Some(target))) => s"path going from $source to $target not traversed"
+      case Some(SourceTarget(Some(source), None)) => s"no target associated to source $source"
+      case None => s"all required source target paths found"
+    }
 }
 
 case class NodeCoverage(nodes: Set[Node]) extends Coverage {

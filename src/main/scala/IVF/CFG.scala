@@ -133,7 +133,7 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
                                 path: Vector[Int], i: Int,
                                 loopStates: Map[Int, Int], param: P,
                                 lambda: (Int, P, Vector[Int]) => (Option[Set[Vector[Int]]], P)): Set[Vector[Int]] =
-    if (label == 0) Set(path)
+    if (cfg.graph.get(label).diPredecessors.isEmpty) Set(path)
     else if (!loopStates.values.forall(amt => amt <= i + 1)) Set()
     else cfg.graph.get(label)
       .diPredecessors
