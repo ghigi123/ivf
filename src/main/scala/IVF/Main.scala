@@ -9,9 +9,10 @@ import implicits._
 
 object Main extends App {
 
-  Sample.samples.foreach{
-    case (name, sample) =>
-      val cfg = sample.ast.toCFG
+  Sample.astSamples.foreach {
+    case (name, astSample) =>
+      val cfg = astSample.ast.toCFG
+
       val dotRoot = DotRootGraph(
         directed = true,
         id = Some(name),
@@ -33,23 +34,46 @@ object Main extends App {
       }
 
       val dot = cfg.graph.toDot(dotRoot, edgeTransformer = edgeTransformer)
-      new PrintWriter("./graphs/" + name + ".dot") {
+      val fileName = s"./graphs/$name.dot"
+      new PrintWriter(fileName) {
         write(dot)
         close()
       }
 
-      println("Sample " + name)
+      println(s"Working on program $name :")
+      println(s"Program $name graph written at $fileName")
 
-      val (testGenerator, requiredCoverage) = Criterion.allKPathsCriterion(cfg, 6)
-      val tests = testGenerator.generateTests()
+      astSample.testList.foreach(sampleTest => {
 
-      tests.checkError match {
-        case Some(err) => println(err)
-        case None => println(tests.flatten)
-      }
+        println(s"  Testing criterion `${sampleTest.criterion.name}`")
+        val (testGenerator, coverage) = sampleTest.criterion.build(cfg)
+        println(s"    Required coverage (${coverage match {
+          case NodeCoverage(_) => "node"
+          case PathCoverage(_) => "path"
+          case SourceTargetCoverage(_) => "from to"
+        }}): $coverage")
+        if(sampleTest.statesList.nonEmpty) {
+          println(s"    Testing on example state sets:")
+          sampleTest.statesList.foreach(states => {
+            println(s"       State set: {${states.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")}}")
+            val coverTest = coverage.coverTestString(cfg, states)
+            println(s"         Coverage test: $coverTest")
+          })
+        }
+        println(s"    Generating tests:")
+        val generatedTests = testGenerator.generateTests()
+        generatedTests.checkError match {
+          case Some(err) => println(s"       Generation error message: $err")
+          case None => Unit
+        }
+        val generatedStates = generatedTests.flatten
+        println(s"       Generated state set: ${generatedStates.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")}")
+        val generatedCoverTest = coverage.coverTestString(cfg, generatedStates.toList)
+        println(s"         Coverage test: $generatedCoverTest")
+      })
 
-      println(requiredCoverage)
 
   }
+
 
 }

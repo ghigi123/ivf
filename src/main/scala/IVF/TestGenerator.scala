@@ -128,10 +128,8 @@ case class PathTestGenerator(override val cfg: CFG, override val name: String, p
         .mapValues(_.getValue)
       ), this)
     } else {
-      GeneratedTestError("Unable to find valid valuation for path " + this.toString, this)
+      GeneratedTestError("unable to solve " + constraints.mkString(" & ") + " for path " + Path(path).toString, this)
     }
   }
-
-  override def toString: String = path.map(_.toString).mkString("~>")
 
 }
