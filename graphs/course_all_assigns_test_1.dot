@@ -1,15 +1,15 @@
-digraph course {
-	label = "
-course"
-	"1 X := -X" [style = bold]
+digraph course_all_assigns_test_1 {
+	label = "(X -> -1), (X -> -2)
+course_all_assigns_test_1"
+	"5 X := 1+X" [color = green, style = bold]
 	"1 X := -X" -> "3 if (X=1)"
 	"2 X := 1-X" -> "3 if (X=1)"
 	"4 X := 1" -> "6 _"
-	"5 X := 1+X" [style = bold]
+	"1 X := -X" [color = green, style = bold]
+	"4 X := 1" [color = green, style = bold]
+	"2 X := 1-X" [color = red, style = bold]
 	"3 if (X=1)" [style = bold]
-	"4 X := 1" [style = bold]
 	"6 _" [style = bold]
-	"2 X := 1-X" [style = bold]
 	"3 if (X=1)" -> "5 X := 1+X" [label = false]
 	"0 if (X<=0)" -> "1 X := -X" [label = true]
 	"5 X := 1+X" -> "6 _"

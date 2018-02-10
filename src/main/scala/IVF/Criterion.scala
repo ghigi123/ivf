@@ -92,7 +92,7 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
       }),
       SourceTargetCoverage(pathsChunks.map { case
         (source, chunkSet) =>
-        if (chunkSet.nonEmpty){
+        if (chunkSet.nonEmpty) {
           val pick = chunkSet.head
           SourceTarget(Some(source), Some(pick.last))
         } else {
@@ -127,11 +127,12 @@ case class AllUsagesCriterion(maxLoopDepth: Int = 1) extends Criterion {
           })
         })
       }),
+
       SourceTargetCoverage(du_paths.flatMap {
-        case (_, var_paths) => var_paths.map {
-          case (_, set) =>
-            val pick = set.head
-            SourceTarget(Some(pick(0)), Some(pick.last))
+        case (variable, variableMap) => variableMap.flatMap {
+          case
+            (target, chunkSet) =>
+            chunkSet.map(pick => SourceTarget(Some(pick(0)), Some(target)))
         }
       }.toSet)
     )
@@ -255,7 +256,9 @@ object Criterion {
 sealed abstract class CoverageUnit
 
 case class Path(path: Vector[Int]) extends CoverageUnit {
-  override def toString: String = {path.mkString("~>")}
+  override def toString: String = {
+    path.mkString("~>")
+  }
 
   def contains(path2: Path): Boolean = path.containsSlice(path2.path)
 }
@@ -311,19 +314,19 @@ case class SourceTargetCoverage(st: Set[SourceTarget]) extends Coverage {
       })
     )
 
-    st.map{
-      case p @ SourceTarget(Some(source), Some(target))=>
-        traversedPaths.find(path=> {
-        val sourceIndexInPath = path.path.indexOf(source)
-        if(sourceIndexInPath >= 0) {
-          val targetIndexInPath = path.path.indexOf(target, sourceIndexInPath + 1)
-          targetIndexInPath >= 0
+    st.map {
+      case p@SourceTarget(Some(source), Some(target)) =>
+        traversedPaths.find(path => {
+          val sourceIndexInPath = path.path.indexOf(source)
+          if (sourceIndexInPath >= 0) {
+            val targetIndexInPath = path.path.indexOf(target, sourceIndexInPath + 1)
+            targetIndexInPath >= 0
+          }
+          else false
+        }) match {
+          case Some(_) => None
+          case None => Some(p)
         }
-        else false
-      }) match {
-        case Some(_) => None
-        case None => Some(p)
-      }
       case p => Some(p)
     }
       .find(_.nonEmpty)

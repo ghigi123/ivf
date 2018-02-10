@@ -8,7 +8,7 @@ import AST.B.Expression.{Value => BValue, Unary => BUnary, Binary => BBinary, Co
 
 case class SampleAST(name: String, ast: AST.Command, testList: List[SampleTest] = List())
 
-case class SampleTest(criterion: Criterion, statesList: List[List[State]] = List(), drawGraph: Boolean = false)
+case class SampleTest(criterion: Criterion, statesList: List[List[State]] = List(), drawGraphs: Boolean = true)
 
 
 object Sample {
@@ -34,7 +34,8 @@ object Sample {
             List(
               List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
               List[State](State(Map("X" -> -1)), State(Map("X" -> -2)))
-            )
+            ),
+            drawGraphs = true
           ),
           SampleTest(
             AllDecisionsCriterion(),
@@ -68,7 +69,8 @@ object Sample {
               List[State](State(Map("X" -> 1))),
               List[State](State(Map("X" -> -2))),
               List[State](State(Map("X" -> 1)),State(Map("X" -> -2))),
-            )
+            ),
+            drawGraphs = true
           )
         )
       ),

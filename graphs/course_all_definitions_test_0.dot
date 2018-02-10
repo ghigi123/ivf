@@ -1,6 +1,6 @@
-digraph course {
-	label = "
-course"
+digraph course_all_definitions_test_0 {
+	label = "(X -> 1), (X -> -1), (X -> -2)
+course_all_definitions_test_0"
 	"1 X := -X" [style = bold]
 	"1 X := -X" -> "3 if (X=1)"
 	"2 X := 1-X" -> "3 if (X=1)"

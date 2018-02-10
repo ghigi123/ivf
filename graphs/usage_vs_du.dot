@@ -1,9 +1,16 @@
 digraph usage_vs_du {
-	label = usage_vs_du
+	label = "
+usage_vs_du"
+	"1 if (false)" [style = bold]
+	"2 skip" [style = bold]
 	"1 if (false)" -> "3 skip" [label = false]
+	"5 _" [style = bold]
+	"4 Z := Y" [style = bold]
+	"0 Y := X" [style = bold]
 	"0 Y := X" -> "1 if (false)"
 	"2 skip" -> "4 Z := Y"
 	"4 Z := Y" -> "5 _"
+	"3 skip" [style = bold]
 	"3 skip" -> "4 Z := Y"
 	"1 if (false)" -> "2 skip" [label = true]
 }
