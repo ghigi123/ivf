@@ -69,7 +69,7 @@ case class AllILoopsCriterion(i: Int) extends Criterion {
 case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
   override def name: String = "all definitions"
 
-  override def build(cfg: CFG): (TestGenerator, SourceTargetCoverage) = {
+  override def build(cfg: CFG): (TestGenerator, SourceAnyTargetCoverage) = {
     val pathsChunks: Map[Int, Set[Vector[Int]]] = cfg.labels
       .filterKeys(cfg.isAssign)
       .map {
@@ -90,14 +90,9 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
           }.toMap)
         })
       }),
-      SourceTargetCoverage(pathsChunks.map { case
-        (source, chunkSet) =>
-        if (chunkSet.nonEmpty) {
-          val pick = chunkSet.head
-          SourceTarget(Some(source), Some(pick.last))
-        } else {
-          SourceTarget(Some(source), None)
-        }
+      SourceAnyTargetCoverage(pathsChunks.map {
+        case (source, chunkSet) =>
+          SourceTargets(Some(source), chunkSet.map(_.last))
       }.toSet)
     )
   }
@@ -267,19 +262,23 @@ case class SourceTarget(source: Option[Int], target: Option[Int]) extends Covera
   override def toString: String = source.map(_.toString).getOrElse("") + "~~>" + target.map(_.toString).getOrElse("")
 }
 
+case class SourceTargets(source: Option[Int], targets: Set[Int]) extends CoverageUnit {
+  override def toString: String = s"${source.map(_.toString).getOrElse("")}~~>{${targets.mkString(", ")}}"
+}
+
 case class Node(node: Int) extends CoverageUnit {
   override def toString: String = node.toString
 }
 
 sealed abstract class Coverage {
 
-  def coverTest(cfg: CFG, states: List[State]): Option[CoverageUnit]
+  def coverTest(cfg: CFG, states: List[State]): Seq[CoverageUnit]
 
   def coverTestString(cfg: CFG, states: List[State]): String
 }
 
 case class PathCoverage(paths: Set[Path]) extends Coverage {
-  override def coverTest(cfg: CFG, states: List[State]): Option[Path] = {
+  override def coverTest(cfg: CFG, states: List[State]): Seq[Path] = {
     val traversedPaths = states.map(state =>
       Path((Vector[Int]() /: cfg.exec(0, state)) {
         case (accV, node) => accV :+ node.value
@@ -293,21 +292,23 @@ case class PathCoverage(paths: Set[Path]) extends Coverage {
           case Some(_) => None
           case None => Some(path)
         })
-      .find(_.nonEmpty)
-      .flatten
+      .filter(_.nonEmpty)
+      .flatten.toSeq
   }
 
-  override def coverTestString(cfg: CFG, states: List[State]): String =
-    this.coverTest(cfg, states) match {
-      case Some(path) => s"path $path not traversed"
-      case None => "all required paths traversed"
-    }
+  override def coverTestString(cfg: CFG, states: List[State]): String = {
+    val paths = this.coverTest(cfg, states)
+    if (paths.nonEmpty)
+      s"paths {${paths.mkString(", ")}} not traversed"
+    else
+      "all required paths traversed"
+  }
 
   override def toString: String = s"{${paths.mkString(", ")}}"
 }
 
 case class SourceTargetCoverage(st: Set[SourceTarget]) extends Coverage {
-  override def coverTest(cfg: CFG, states: List[State]): Option[SourceTarget] = {
+  override def coverTest(cfg: CFG, states: List[State]): Seq[SourceTarget] = {
     val traversedPaths = states.map(state =>
       Path((Vector[Int]() /: cfg.exec(0, state)) {
         case (accV, node) => accV :+ node.value
@@ -329,20 +330,59 @@ case class SourceTargetCoverage(st: Set[SourceTarget]) extends Coverage {
         }
       case p => Some(p)
     }
-      .find(_.nonEmpty)
-      .flatten
+      .filter(_.nonEmpty)
+      .flatten.toSeq
   }
 
-  override def coverTestString(cfg: CFG, states: List[State]): String =
-    this.coverTest(cfg, states) match {
-      case Some(SourceTarget(Some(source), Some(target))) => s"path going from $source to $target not traversed"
-      case Some(SourceTarget(Some(source), None)) => s"no target associated to source $source"
-      case None => s"all required source target paths found"
-    }
+  override def toString: String =  "paths: {" + st.mkString(", ") + "}"
+
+  override def coverTestString(cfg: CFG, states: List[State]): String = {
+    val sts = this.coverTest(cfg, states)
+    if (sts.nonEmpty)
+      s"source target paths {${sts.mkString(", ")}} not traversed"
+    else
+      s"all required source target paths found"
+  }
+}
+
+case class SourceAnyTargetCoverage(stss: Set[SourceTargets]) extends Coverage {
+  override def coverTest(cfg: CFG, states: List[State]): Seq[SourceTargets] = {
+    val traversedPaths = states.map(state =>
+      (Vector[Node]() /: cfg.exec(0, state)) {
+        case (accV, node) => accV :+ Node(node.value)
+      }
+    )
+
+    stss
+      .map(sts => {
+        val stList = sts.targets.map(tgt => SourceTarget(Some(sts.source.get), Some(tgt)))
+        val stCovList = stList.map(st => SourceTargetCoverage(Set(st)))
+        if (sts.targets.isEmpty) {
+          Some(sts)
+        } else if (stCovList.map(_.coverTest(cfg, states)).exists(_.isEmpty)) {
+          None
+        } else {
+          Some(sts)
+        }
+      }
+      )
+      .filter(_.nonEmpty)
+      .flatten.toSeq
+  }
+
+  override def coverTestString(cfg: CFG, states: List[State]): String = {
+    val failedStss = this.coverTest(cfg, states)
+    if (failedStss.nonEmpty) {
+      s"source to any target paths {${failedStss.mkString(", ")}} not traversed"
+    } else
+      s"all sources to any target paths traversed"
+  }
+
+  override def toString: String = "paths: {" + stss.mkString(", ") + "}"
 }
 
 case class NodeCoverage(nodes: Set[Node]) extends Coverage {
-  override def coverTest(cfg: CFG, states: List[State]): Option[Node] = {
+  override def coverTest(cfg: CFG, states: List[State]): Seq[Node] = {
     val traversedPaths = states.map(state =>
       (Vector[Node]() /: cfg.exec(0, state)) {
         case (accV, node) => accV :+ Node(node.value)
@@ -357,15 +397,16 @@ case class NodeCoverage(nodes: Set[Node]) extends Coverage {
           if (traversedNodes.contains(node)) None
           else Some(node)
       )
-      .find(_.nonEmpty)
-      .flatten
+      .filter(_.nonEmpty)
+      .flatten.toSeq
   }
 
   override def toString: String = s"nodes : {${nodes.mkString(", ")}}"
 
-  override def coverTestString(cfg: CFG, states: List[State]): String =
-    this.coverTest(cfg, states) match {
-      case Some(n) => s"node ${n.toString} not traversed"
-      case None => s"all required nodes traversed"
-    }
+  override def coverTestString(cfg: CFG, states: List[State]): String = {
+    val nodes = this.coverTest(cfg, states)
+    if (nodes.nonEmpty) s"nodes {${nodes.mkString(", ")}} not traversed"
+    else
+      s"all required nodes traversed"
+  }
 }

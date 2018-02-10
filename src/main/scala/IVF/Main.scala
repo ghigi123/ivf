@@ -130,6 +130,7 @@ object Main extends App {
             case NodeCoverage(_) => "node"
             case PathCoverage(_) => "path"
             case SourceTargetCoverage(_) => "from to"
+            case SourceAnyTargetCoverage(_) => "from to any of"
           }
         }): $coverage")
         if (sampleTest.statesList.nonEmpty) {
@@ -141,12 +142,13 @@ object Main extends App {
               val coverTest = coverage.coverTestString(cfg, states)
               println(s"         Coverage test: $coverTest")
               if (sampleTest.drawGraphs)
-                println(exportGraph(cfg, name + "_" + sampleTest.criterion.name.replace(' ', '_') + "_test_" + idx,
+                println("         Exported graph for test at " + exportGraph(cfg, name + "_" + sampleTest.criterion.name.replace(' ', '_') + "_test_" + idx,
                   redCoverageUnits = coverage.coverTest(cfg, states).toSeq,
                   greenCoverageUnits = coverage match {
                     case NodeCoverage(set) => set.toSeq
                     case PathCoverage(set) => set.toSeq
                     case SourceTargetCoverage(set) => set.toSeq
+                    case SourceAnyTargetCoverage(set) => set.toSeq
                   },
                   label = stateString
                 ))
@@ -159,7 +161,7 @@ object Main extends App {
           case None => Unit
         }
         val generatedStates = generatedTests.flatten
-        println(s"       Generated state set: ${generatedStates.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")}")
+        println(s"       Generated state set: {${generatedStates.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")}}")
         val generatedCoverTest = coverage.coverTestString(cfg, generatedStates.toList)
         println(s"         Coverage test: $generatedCoverTest")
       })
