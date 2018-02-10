@@ -35,6 +35,7 @@ sealed abstract class AST {
       }) + b.toString
     case AST.A.Expression.Unary(op, e) => (op match {
       case AST.A.Operator.Sub => "-"
+      case AST.A.Operator.Plus => "+"
     }) + e.toString
     case AST.A.Expression.Binary(op, a, b) =>
       a.toString + (op match {
@@ -178,6 +179,7 @@ object AST {
         }
         case A.Expression.Unary(op, e) => op match {
           case A.Operator.Sub => -e.eval(state)
+          case A.Operator.Plus => e.eval(state)
         }
       }
 
@@ -206,6 +208,7 @@ object AST {
           val av = a.toConstraintVar(model, variables)
           op match {
             case A.Operator.Sub => model.intVar(0).sub(av).intVar()
+            case A.Operator.Plus => model.intVar(0).add(av).intVar()
           }
       }
     }
