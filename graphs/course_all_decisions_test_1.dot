@@ -1,5 +1,6 @@
 digraph course_all_decisions_test_1 {
 	label = "(X -> -1), (X -> -2)
+coverage: 75.0%
 course_all_decisions_test_1"
 	"5 X := 1+X" [color = green, style = bold]
 	"1 X := -X" -> "3 if (X=1)"

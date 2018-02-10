@@ -14,6 +14,11 @@ object Main extends App {
       case _ => false
     }.map {
       case Node(a) => Node(a)
+    } ++ redCoverageUnits.filter {
+      case SourceTargets(Some(_),_) => true
+      case _ => false
+    }.map{
+      case SourceTargets(source, _) => Node(source.get)
     }
 
     val greenNodes = greenCoverageUnits.filter {
@@ -44,24 +49,17 @@ object Main extends App {
       case a@SourceTarget(_, _) => a
     }
 
-    val greenSourceTarget = greenCoverageUnits.filter {
-      case SourceTarget(_, _) => true
-      case _ => false
-    }.map {
-      case a@SourceTarget(_, _) => a
-    }
-
-    val newEdges = greenSourceTarget
+    val newEdges = redSourceTarget
       .filter {
-        case SourceTarget(Some(s), Some(t)) =>true
+        case SourceTarget(Some(_), Some(_)) =>true
         case _ => false
       }
       .map {
-        case SourceTarget(Some(source), Some(target)) => LDiEdge(source, target)("def")
+        case SourceTarget(Some(source), Some(target)) => LDiEdge(source, target)("usage")
       }.toList
 
     val cfgWithAux = (cfg/:newEdges){
-      case (cfgAcc, edge) => cfgAcc.graphOp(_ + edge)
+      case (cfgAcc, edge) => cfgAcc.graphOp(_ - edge + edge)
     }
 
     val dotRoot = DotRootGraph(
@@ -81,7 +79,7 @@ object Main extends App {
             case "" => Seq()
             case _ => Seq(DotAttr("label", value.toString))
           }) ++ (
-            if (redEdges.contains(Vector(source.value, target.value)))
+            if (redEdges.contains(Vector(source.value, target.value)) || value == "usage")
               Seq(DotAttr("color", "red"))
             else if (greenEdges.contains(Vector(source.value, target.value)))
               Seq(DotAttr("color", "green"))
@@ -140,17 +138,15 @@ object Main extends App {
               val stateString = states.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")
               println(s"       State set: {$stateString")
               val coverTest = coverage.coverTestString(cfg, states)
+              val coverTestVals = coverage.coverTest(cfg, states)
               println(s"         Coverage test: $coverTest")
+              val coverageTestPercent = ((1.0 - coverTestVals.size.toFloat / Coverage.coverageAsSeq(coverage).size.toFloat)* 100).toString + "%"
+              println(s"         Coverage rate: " + coverageTestPercent)
               if (sampleTest.drawGraphs)
                 println("         Exported graph for test at " + exportGraph(cfg, name + "_" + sampleTest.criterion.name.replace(' ', '_') + "_test_" + idx,
-                  redCoverageUnits = coverage.coverTest(cfg, states).toSeq,
-                  greenCoverageUnits = coverage match {
-                    case NodeCoverage(set) => set.toSeq
-                    case PathCoverage(set) => set.toSeq
-                    case SourceTargetCoverage(set) => set.toSeq
-                    case SourceAnyTargetCoverage(set) => set.toSeq
-                  },
-                  label = stateString
+                  redCoverageUnits = coverTestVals,
+                  greenCoverageUnits = Coverage.coverageAsSeq(coverage),
+                  label = stateString + "\n" + "coverage: " + coverageTestPercent
                 ))
           }
         }

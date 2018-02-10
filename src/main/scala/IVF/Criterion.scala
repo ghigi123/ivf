@@ -1,5 +1,7 @@
 package IVF
 
+import IVF.AST.A.Expression
+
 sealed abstract class Criterion {
   def name: String
 
@@ -103,22 +105,27 @@ case class AllUsagesCriterion(maxLoopDepth: Int = 1) extends Criterion {
 
   override def build(cfg: CFG): (TestGenerator, SourceTargetCoverage) = {
     val du_paths: Map[AST.A.Expression.Variable, Map[Int, Set[Vector[Int]]]] = Criterion.allRefToDefPaths(cfg, maxLoopDepth)
-    val extended_du_paths: Map[AST.A.Expression.Variable, Map[Int, Map[String, Vector[Vector[Int]]]]] =
-      du_paths.mapValues(var_du_paths =>
-        var_du_paths.mapValues(chunks =>
-          chunks.map(chunk =>
-            chunk.mkString("~>") -> cfg.fillPathUp(chunk, maxLoopDepth)
-          ).toMap
+    val grouped_du_paths = du_paths.mapValues(_.mapValues(_.groupBy(vec => vec(0) + "~~>" + vec.last)))
+    val extended_du_paths: Map[Expression.Variable, Map[Int, Map[String, Map[String, Vector[Vector[Int]]]]]] =
+      grouped_du_paths.mapValues(var_du_paths =>
+        var_du_paths.mapValues(ref_du_paths =>
+          ref_du_paths.mapValues(chunks =>
+            chunks.map(chunk =>
+              chunk.mkString("~>") -> cfg.fillPathUp(chunk, maxLoopDepth)
+            ).toMap
+          )
         )
       )
 
     (
-      TestGeneratorMap(cfg, "all usages", All, extended_du_paths.map {
-        case (key, map1) => key.toString -> TestGeneratorMap(cfg, "all_ref", All, map1.map {
-          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "all_def_to_ref", Any, map2.map {
-            case (defToRef, map3) => defToRef -> TestGeneratorMap(cfg, "any_path", Any, map3.zipWithIndex.map {
-              case (path, idx) => idx.toString -> PathTestGenerator(cfg, "leaf", path)
-            }.toMap)
+      TestGeneratorMap(cfg, "variable", All, extended_du_paths.map {
+        case (key, map1) => key.toString -> TestGeneratorMap(cfg, "ref", All, map1.map {
+          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "def to ref", All, map2.map {
+            case (defToRefId, map4) => defToRefId.toString -> TestGeneratorMap(cfg, "def to ref path", Any, map4.map {
+              case (defToRef, map3) => defToRef -> TestGeneratorMap(cfg, "extended def to ref path", Any, map3.zipWithIndex.map {
+                case (path, idx) => idx.toString -> PathTestGenerator(cfg, "constraint", path)
+              }.toMap)
+            })
           })
         })
       }),
@@ -334,7 +341,7 @@ case class SourceTargetCoverage(st: Set[SourceTarget]) extends Coverage {
       .flatten.toSeq
   }
 
-  override def toString: String =  "paths: {" + st.mkString(", ") + "}"
+  override def toString: String = "paths: {" + st.mkString(", ") + "}"
 
   override def coverTestString(cfg: CFG, states: List[State]): String = {
     val sts = this.coverTest(cfg, states)
@@ -408,5 +415,14 @@ case class NodeCoverage(nodes: Set[Node]) extends Coverage {
     if (nodes.nonEmpty) s"nodes {${nodes.mkString(", ")}} not traversed"
     else
       s"all required nodes traversed"
+  }
+}
+
+object Coverage {
+  def coverageAsSeq(coverage: Coverage): Seq[CoverageUnit] = coverage match {
+    case NodeCoverage(set) => set.toSeq
+    case PathCoverage(set) => set.toSeq
+    case SourceTargetCoverage(set) => set.toSeq
+    case SourceAnyTargetCoverage(set) => set.toSeq
   }
 }

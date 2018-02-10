@@ -1,10 +1,10 @@
 digraph course_all_usages_test_1 {
 	label = "(X -> -2)
+coverage: 50.0%
 course_all_usages_test_1"
-	"1 X := -X" -> "5 X := 1+X" [label = def]
 	"1 X := -X" [style = bold]
+	"2 X := 1-X" -> "5 X := 1+X" [label = usage, color = red]
 	"1 X := -X" -> "3 if (X=1)"
-	"2 X := 1-X" -> "3 if (X=1)"
 	"4 X := 1" -> "6 _"
 	"5 X := 1+X" [style = bold]
 	"3 if (X=1)" [style = bold]
@@ -13,9 +13,9 @@ course_all_usages_test_1"
 	"2 X := 1-X" [style = bold]
 	"3 if (X=1)" -> "5 X := 1+X" [label = false]
 	"0 if (X<=0)" -> "1 X := -X" [label = true]
+	"2 X := 1-X" -> "3 if (X=1)" [label = usage, color = red]
 	"5 X := 1+X" -> "6 _"
 	"0 if (X<=0)" [style = bold]
-	"2 X := 1-X" -> "5 X := 1+X" [label = def]
 	"0 if (X<=0)" -> "2 X := 1-X" [label = false]
 	"3 if (X=1)" -> "4 X := 1" [label = true]
 }
