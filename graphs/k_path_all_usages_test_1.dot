@@ -1,6 +1,7 @@
-digraph k_path {
-	label = "
-k_path"
+digraph k_path_all_usages_test_1 {
+	label = "(X -> 5, Y -> 2), (X -> 5, Y -> -100), (X -> 6, Y -> 6), (X -> 4, Y -> 4), (X -> 5, Y -> 5), (X -> 4, Y -> 3), (X -> 6, Y -> 2)
+coverage: 87%
+k_path_all_usages_test_1"
 	"4 X := X-1" -> "1 while (X>=2)"
 	"2 if (Y>=2)" -> "5 X := X-1" [label = false]
 	"1 while (X>=2)" -> "2 if (Y>=2)" [label = true]
@@ -16,4 +17,5 @@ k_path"
 	"0 skip" [style = bold]
 	"0 skip" -> "1 while (X>=2)"
 	"1 while (X>=2)" -> "6 _" [label = false]
+	"5 X := X-1" -> "4 X := X-1" [label = usage, color = red]
 }

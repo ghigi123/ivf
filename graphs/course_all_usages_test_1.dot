@@ -1,6 +1,6 @@
 digraph course_all_usages_test_1 {
 	label = "(X -> -2)
-coverage: 50.0%
+coverage: 50%
 course_all_usages_test_1"
 	"1 X := -X" [style = bold]
 	"2 X := 1-X" -> "5 X := 1+X" [label = usage, color = red]

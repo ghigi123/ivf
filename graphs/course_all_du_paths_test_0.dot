@@ -1,6 +1,6 @@
 digraph course_all_du_paths_test_0 {
 	label = "(X -> 1)
-coverage: 50.0%
+coverage: 50%
 course_all_du_paths_test_0"
 	"1 X := -X" [style = bold]
 	"1 X := -X" -> "3 if (X=1)" [color = red]

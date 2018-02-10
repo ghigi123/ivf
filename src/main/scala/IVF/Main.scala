@@ -140,7 +140,7 @@ object Main extends App {
               val coverTest = coverage.coverTestString(cfg, states)
               val coverTestVals = coverage.coverTest(cfg, states)
               println(s"         Coverage test: $coverTest")
-              val coverageTestPercent = ((1.0 - coverTestVals.size.toFloat / Coverage.coverageAsSeq(coverage).size.toFloat)* 100).toString + "%"
+              val coverageTestPercent = ((1.0 - coverTestVals.size.toFloat / Coverage.coverageAsSeq(coverage).size.toFloat)* 100).toInt.toString + "%"
               println(s"         Coverage rate: " + coverageTestPercent)
               if (sampleTest.drawGraphs)
                 println("         Exported graph for test at " + exportGraph(cfg, name + "_" + sampleTest.criterion.name.replace(' ', '_') + "_test_" + idx,
@@ -160,6 +160,8 @@ object Main extends App {
         println(s"       Generated state set: {${generatedStates.map(st => "(" + st.values.map { case (n, v) => n + " -> " + v }.mkString(", ") + ")").mkString(", ")}}")
         val generatedCoverTest = coverage.coverTestString(cfg, generatedStates.toList)
         println(s"         Coverage test: $generatedCoverTest")
+        val coverageTestPercent = ((1.0 - coverage.coverTest(cfg, generatedStates.toList).size.toFloat / Coverage.coverageAsSeq(coverage).size.toFloat)* 100).toInt.toString + "%"
+        println(s"         Coverage rate: " + coverageTestPercent)
       })
 
 

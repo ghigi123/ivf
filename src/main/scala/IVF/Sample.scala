@@ -34,8 +34,7 @@ object Sample {
             List(
               List[State](State(Map("X" -> 1)), State(Map("X" -> -1)), State(Map("X" -> -2))),
               List[State](State(Map("X" -> -1)), State(Map("X" -> -2)))
-            ),
-            drawGraphs = true
+            )
           ),
           SampleTest(
             AllDecisionsCriterion(),
@@ -68,31 +67,39 @@ object Sample {
             List(
               List[State](State(Map("X" -> 1))),
               List[State](State(Map("X" -> -2))),
-              List[State](State(Map("X" -> 1)),State(Map("X" -> -2))),
-            ),
-            drawGraphs = true
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -2))),
+            )
           )
         )
       ),
       SampleAST(
         "k_path", Sequence(List(
-          Assign(Variable("X"), AValue(0)),
-          While(BValue(true),
-            If(BValue(true),
+          Skip(),
+          While(Comparator(GreaterEqual, Variable("X"), AValue(2)),
+            If(Comparator(GreaterEqual, Variable("Y"), AValue(2)),
               Sequence(
                 List(
-                  Skip(),
-                  Skip()
+                  Assign(Variable("Y"), ABinary(Sub, Variable("Y"), AValue(1))),
+                  Assign(Variable("X"), ABinary(Sub, Variable("X"), AValue(1)))
                 )
               ),
-              Skip()
+              Assign(Variable("X"), ABinary(Sub, Variable("X"), AValue(1)))
             )
           )
         )),
         List(
           SampleTest(
-            AllKPathCriterion(8),
-            List()
+            AllKPathCriterion(9),
+            List(
+              List(State(Map("X" -> 2, "Y" -> -1)), State(Map("X" -> 2, "Y" -> 2)), State(Map("X" -> 3, "Y" -> 2)), State(Map("X" -> -1)), State(Map("X" -> 3, "Y" -> -1)))
+            )
+          ),
+          SampleTest(
+            AllUsagesCriterion(3),
+            List(
+              List(State(Map("X" -> 2, "Y" -> -1)), State(Map("X" -> 2, "Y" -> 2)), State(Map("X" -> 3, "Y" -> 2)), State(Map("X" -> -1)), State(Map("X" -> 3, "Y" -> -1))),
+              List(State(Map("X" -> 5, "Y" -> 2)), State(Map("X" -> 5, "Y" -> 1)), State(Map("X" -> 6, "Y" -> 6)), State(Map("X" -> 4, "Y" -> 4)), State(Map("X" -> 5, "Y" -> 5)), State(Map("X" -> 4, "Y" -> 3)), State(Map("X" -> 6, "Y" -> 2)))
+            )
           )
         )
       ),
