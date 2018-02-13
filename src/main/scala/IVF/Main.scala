@@ -2,9 +2,16 @@ package IVF
 
 import java.io.PrintWriter
 
+import Model.CFG
+
 import scalax.collection.edge.LDiEdge
 import scalax.collection.io.dot._
 import implicits._
+import Criterion._
+
+/**
+  * The entry point for computations
+  */
 
 object Main extends App {
 
@@ -70,7 +77,7 @@ object Main extends App {
       )
     )
 
-    def edgeTransformer(innerEdge: CFG.GraphType#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
+    def edgeTransformer(innerEdge: Model.CFG.GraphType#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
       case LDiEdge(source, target, value: String) =>
         Some((dotRoot, DotEdgeStmt(
           cfgWithAux.nodeToString(source.value),
@@ -89,7 +96,7 @@ object Main extends App {
         )))
     }
 
-    def nodeTransformer(innerNode: CFG.GraphType#NodeT): Option[(DotGraph, DotNodeStmt)] =
+    def nodeTransformer(innerNode: Model.CFG.GraphType#NodeT): Option[(DotGraph, DotNodeStmt)] =
       Some(dotRoot, DotNodeStmt(
         cfgWithAux.nodeToString(innerNode.value),
         (if (redNodes.exists(_.node == innerNode.value))

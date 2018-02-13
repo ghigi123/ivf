@@ -1,16 +1,34 @@
 package IVF
 
-import AST._
-import AST.A.Operator._
-import AST.A.Comparator._
-import AST.A.Expression.{Value => AValue, Unary => AUnary, Binary => ABinary, Variable}
-import AST.B.Expression.{Value => BValue, Unary => BUnary, Binary => BBinary, Comparator}
+import Model.AST._
+import Model.AST.A.Operator._
+import Model.AST.A.Comparator._
+import Model.AST.A.Expression.{Variable, Binary => ABinary, Unary => AUnary, Value => AValue}
+import Model.AST.B.Expression.{Comparator, Binary => BBinary, Unary => BUnary, Value => BValue}
+import Criterion._
+import IVF.Model.State
 
-case class SampleAST(name: String, ast: AST.Command, testList: List[SampleTest] = List())
+/**
+  * Holds an abstract syntax tree and tests to run on it
+  * @param name abstract syntax tree name
+  * @param ast abstract syntax tree to hold
+  * @param testList tests to execute on ast
+  */
+
+case class SampleAST(name: String, ast: Command, testList: List[SampleTest] = List())
+
+/**
+  * Holds a test to run
+  * @param criterion criterion to test
+  * @param statesList list of states to run the criterion with
+  * @param drawGraphs draw graphs for tests in statesList
+  */
 
 case class SampleTest(criterion: Criterion, statesList: List[List[State]] = List(), drawGraphs: Boolean = true)
 
-
+/**
+  * This objects holds the tests to run
+  */
 object Sample {
   val astSamples: Map[String, SampleAST] =
     List[SampleAST](
@@ -99,6 +117,12 @@ object Sample {
             List(
               List(State(Map("X" -> 2, "Y" -> -1)), State(Map("X" -> 2, "Y" -> 2)), State(Map("X" -> 3, "Y" -> 2)), State(Map("X" -> -1)), State(Map("X" -> 3, "Y" -> -1))),
               List(State(Map("X" -> 5, "Y" -> 2)), State(Map("X" -> 5, "Y" -> 1)), State(Map("X" -> 6, "Y" -> 6)), State(Map("X" -> 4, "Y" -> 4)), State(Map("X" -> 5, "Y" -> 5)), State(Map("X" -> 4, "Y" -> 3)), State(Map("X" -> 6, "Y" -> 2)))
+            )
+          ),
+          SampleTest(
+            AllDefinitionsCriterion(3),
+            List(
+              List(State(Map("X" -> 3, "Y" -> 3)))
             )
           )
         )
