@@ -1,5 +1,5 @@
 digraph k_path_all_usages_test_1 {
-	label = "(X -> 5, Y -> 2), (X -> 5, Y -> -100), (X -> 6, Y -> 6), (X -> 4, Y -> 4), (X -> 5, Y -> 5), (X -> 4, Y -> 3), (X -> 6, Y -> 2)
+	label = "(X -> 5, Y -> 2), (X -> 5, Y -> 1), (X -> 6, Y -> 6), (X -> 4, Y -> 4), (X -> 5, Y -> 5), (X -> 4, Y -> 3), (X -> 6, Y -> 2)
 coverage: 87%
 k_path_all_usages_test_1"
 	"4 X := X-1" -> "1 while (X>=2)"
