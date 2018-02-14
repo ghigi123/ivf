@@ -15,6 +15,34 @@ object Sample {
   val astSamples: Map[String, SampleAST] =
     List[SampleAST](
       SampleAST(
+        "max_x_y",
+        If(
+          Comparator(GreaterEqual, Variable("X"), Variable("Y")),
+          Assign(Variable("Z"), Variable("X")),
+          Assign(Variable("Z"), Variable("Y"))
+        ),
+        List(
+          SampleTest(
+            AllAssignCriterion(),
+            List(
+              List(State(Map("X" -> 2, "Y" -> 5)), State(Map("X" -> 5, "Y" -> 2)))
+            )
+          ),
+          SampleTest(
+            AllDefinitionsCriterion(),
+            List(
+              List(State(Map("X" -> 2, "Y" -> 5)), State(Map("X" -> 5, "Y" -> 2)))
+            )
+          ),
+          SampleTest(
+            AllDecisionsCriterion(),
+            List(
+              List(State(Map("X" -> 2, "Y" -> 5)), State(Map("X" -> 5, "Y" -> 2)))
+            )
+          )
+        )
+      ),
+      SampleAST(
         "base_converter",
         If(
           Comparator(Less, Variable("X"), AValue(0)),
