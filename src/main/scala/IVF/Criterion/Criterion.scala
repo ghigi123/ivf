@@ -220,9 +220,9 @@ case class AllDUPathsCriterion(maxLoopDepth: Int = 1) extends Criterion {
       )
     // see report for more about this structure
     (
-      TestGeneratorMap(cfg, "all du paths", All, extended_du_paths.map {
+      TestGeneratorMap(cfg, "variable", All, extended_du_paths.map {
         case (key, map1) => key.toString -> TestGeneratorMap(cfg, "ref", All, map1.map {
-          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "def_to_ref", All, map2.map {
+          case (refId, map2) => refId.toString -> TestGeneratorMap(cfg, "def to ref", All, map2.map {
             case (defToRef, map3) => defToRef -> TestGeneratorMap(cfg, "path", Any, map3.zipWithIndex.map {
               case (path, idx) => idx.toString -> PathTestGenerator(cfg, "leaf", path)
             }.toMap)
@@ -291,8 +291,7 @@ object Criterion {
       else (None, variable)
     }
 
-    val loopStates = cfg.labels.keys.filter(cfg.isWhile).map(_ -> 0).toMap
-    cfg.forwardPathBuilderAux(label, Vector(label), maxLoopExec, loopStates, variable, lambda) // look at doc
+    cfg.forwardPathBuilderAux(label, Vector(label), maxLoopExec, cfg.emptyLoopStates, variable, lambda) // look at doc
   }
 
   /**

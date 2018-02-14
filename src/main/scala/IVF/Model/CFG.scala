@@ -114,7 +114,7 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
     * @return
     */
   def extend(graph2: CFG.GraphType, labels2: Map[Int, AST.Command]): CFG =
-    CFG(graph ++ graph2, labels ++ labels2)
+    this.copy(graph ++ graph2, labels ++ labels2)
 
   /** Returns a new CFG made of this extended with a new CFG
     *
@@ -130,7 +130,7 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
     * @return
     */
   def mapOp(op: Map[Int, AST.Command] => Map[Int, AST.Command]): CFG =
-    CFG(graph, op(labels))
+    this.copy(labels = op(labels))
 
   /** Returns a new CFG whose graph is changed by the lambda given
     *
@@ -138,7 +138,7 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
     * @return
     */
   def graphOp(op: CFG.GraphType => CFG.GraphType): CFG =
-    CFG(op(graph), labels)
+    this.copy(graph = op(graph))
 
   /** Get the first line of an AST for graph display
     *
@@ -257,7 +257,7 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
         }
       }
       )
-      .reduce((a, b) => a ++ b)
+      .reduce(_ ++ _)
 
   /** Recursive function used to build paths from a source in the backward direction
     *
@@ -312,5 +312,5 @@ case class CFG(graph: CFG.GraphType, labels: Map[Int, AST.Command]) {
           case None => cfg.backwardPathBuilderAux[P](node.value, node.value +: path, i, newLoopStates, nextParam, lambda)
         }
       })
-      .foldLeft(Set[Vector[Int]]())((a, b) => a ++ b)
+      .foldLeft(Set[Vector[Int]]())(_ ++ _)
 }
