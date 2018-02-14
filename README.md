@@ -352,6 +352,7 @@ GNU sed peut être nécessaire pour utiliser le flag `-r` (Regular Expression ex
 Graphe d'exemple             |  Test 'toutes les assignations'
 :-------------------------:|:-------------------------:
 ![enter image description here](https://lh3.googleusercontent.com/9WSchfJWotp0KR-f8MghvgF3YMopYbPWp5cCREgEs-oFaFWiNLHetaTdsFYo--6FuvcRgKorrGY "Graphe d'exemple")|![enter image description here](https://lh3.googleusercontent.com/Qz6hA8bruWIh8FM65m1Q7LB3DfPk71c2FekSNCDtfwkvA23vlQa8ZxcsrK2j2HYxXfl6rC_M3CU "Graphe d'exemple testé")
+
 Ici les assignations avec le label 7 (`Z := Y`) et 5 (`Y := 5`) ne sont pas atteignables avec comme valuations testées `(X->1, Y->2)` et `(Z->-1)`
 
 ## Applications et exemples
