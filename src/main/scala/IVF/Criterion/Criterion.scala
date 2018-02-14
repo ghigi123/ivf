@@ -118,7 +118,7 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
     // here we get the paths from a definition to its usages
     val pathsChunks: Map[Int, Set[Vector[Int]]] = cfg.labels
       .filterKeys(cfg.isAssign)
-      .map {
+      .collect {
         case (label: Int, AST.Assign(tVariable, _)) =>
           label -> Criterion.firstRefFromDefPaths(cfg, label, tVariable, maxLoopDepth)
       }
@@ -329,7 +329,7 @@ object Criterion {
         .filter {
           case AST.Assign(_, _) => true
           case _ => false
-        }.map {
+        }.collect {
         case AST.Assign(a, _) => a
       }
         .toSet
