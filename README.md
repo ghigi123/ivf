@@ -4,10 +4,18 @@ Execution Symbolique et Test Structurel
 Projet d'Introduction à la Vérification Formelle
 
 Ghislain Jeanneau & Arnault Chazareix
-## Introduction
+
 Le but de ce projet est de construire un outil d'analyse de couverture et de génération de test sur le langage **WHILE annoté**.
 
-## Architecture du projet
+#### Table des matières
+
+1. [Architecture du projet](#1-architecture-du-projet)
+2. [Choix de conception](#2-choix-de-conception)
+3. [Utilisation](#3-utilisation)
+4. [Applications et exemples](#4-applications-et-exemples)
+
+
+## 1. Architecture du projet
 
 Ce projet est orienté autour de plusieurs concepts
  * L' Abstract Syntax Tree (classe `AST` et filles) et le Control Flow Graph (classe `CFG`)
@@ -95,7 +103,7 @@ Les critères sont définis dans le fichier `Criterion.scala`. Ils dérivent tou
  * Un générateur de test
  * Une couverture requise
 
-## Choix de conception
+## 2. Choix de conception
 
 ### Structures de données
 
@@ -242,7 +250,7 @@ val graph2 = graph - (1~>2)
 // on a maintenant graph2 = Graph(2~>3, 3~>1)
 ```
 
-## Utilisation
+## 3. Utilisation
 ### Scala
 Installer Scala & sbt (Simple Build Tool: outil de build pour Scala & Java).
 > apt-get install sbt
@@ -355,7 +363,7 @@ Graphe d'exemple             |  Test 'toutes les assignations'
 
 Ici les assignations avec le label 7 (`Z := Y`) et 5 (`Y := 5`) ne sont pas atteignables avec comme valuations testées `(X->1, Y->2)` et `(Z->-1)`
 
-## Applications et exemples
+## 4. Applications et exemples
 
 ### Exemple 1
 
