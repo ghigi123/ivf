@@ -15,7 +15,7 @@ Ce projet est orienté autour de plusieurs concepts
  * La vérification de couverture (classes `Coverage` et `CoverageUnit`)
  * La génération de tests (classes `TestGenerator` et filles)
 
-Une documentation complète du code se trouve dans `/docs`
+Une documentation complète du code se trouve dans `/docs` et est accessible [ici](https://ghigi123.github.io/ivf/IVF/index.html)
 
 ### Définition de l'Abstract Syntax Tree (AST)
 
@@ -348,6 +348,7 @@ Convertir un seul fichier `.dot` en ficher `.png` :
 > dot -Tpng <filename>.dot -o <filename>.png
 
 GNU sed peut être nécessaire pour utiliser le flag `-r` (Regular Expression extended). Si seulement BSD sed est disponible, le flag `-r` peut être remplacé par le flag `-E`.
+
 Graphe d'exemple             |  Test 'toutes les assignations'
 :-------------------------:|:-------------------------:
 ![enter image description here](https://lh3.googleusercontent.com/9WSchfJWotp0KR-f8MghvgF3YMopYbPWp5cCREgEs-oFaFWiNLHetaTdsFYo--6FuvcRgKorrGY "Graphe d'exemple")|![enter image description here](https://lh3.googleusercontent.com/Qz6hA8bruWIh8FM65m1Q7LB3DfPk71c2FekSNCDtfwkvA23vlQa8ZxcsrK2j2HYxXfl6rC_M3CU "Graphe d'exemple testé")
@@ -355,4 +356,98 @@ Ici les assignations avec le label 7 (`Z := Y`) et 5 (`Y := 5`) ne sont pas atte
 
 ## Applications et exemples
 
-### Critère
+### Exemple 1
+
+![ex1](./graphs/course.png)
+
+#### Critère toutes les assignations
+
+Ici on cherche simplement les assignations, et on vérifie qu'elles sont toutes atteintes.
+
+##### Sortie du programme
+
+```
+Testing criterion `all assigns`
+    Required coverage (node): nodes : {5, 1, 2, 4}
+    Testing on example state sets:
+       State set: {(X -> 1), (X -> -1), (X -> -2)
+         Coverage test: all required nodes traversed
+         Coverage rate: 100%
+         Exported graph for test at ./graphs/course_all_assigns_test_0.dot
+       State set: {(X -> -1), (X -> -2)
+         Coverage test: nodes {2} not traversed
+         Coverage rate: 75%
+         Exported graph for test at ./graphs/course_all_assigns_test_1.dot
+    Generating tests:
+       Generated state set: {(X -> 1), (X -> -100), (X -> -1)}
+         Coverage test: all required nodes traversed
+         Coverage rate: 100%
+```
+##### Graphes générés
+Test 0 | Test 1
+:-------------------------:|:-------------------------:
+![ex1_test_0](./graphs/course_all_assigns_test_0.png)|![ex1_test_1](./graphs/course_all_assigns_test_1.png)
+
+### Exemple 2
+
+![ex2](./graphs/k_path.png)
+
+#### Critère tous les k-chemins
+
+Ici on cherche les k-chemins avec k = 9
+
+##### Sortie du programme
+
+```
+Testing criterion `all k paths with k=9`
+    Required coverage (path): {0~>1~>6, 0~>1~>2~>5~>1~>6, 0~>1~>2~>3~>4~>1~>6, 0~>1~>2~>3~>4~>1~>2~>5~>1~>6, 0~>1~>2~>5~>1~>2~>5~>1~>6, 0~>1~>2~>5~>1~>2~>3~>4~>1~>6}
+    Testing on example state sets:
+       State set: {(X -> 2, Y -> -1), (X -> 2, Y -> 2), (X -> 3, Y -> 2), (X -> -1), (X -> 3, Y -> -1)
+         Coverage test: paths {0~>1~>2~>5~>1~>2~>3~>4~>1~>6} not traversed
+         Coverage rate: 83%
+         Exported graph for test at ./graphs/k_path_all_k_paths_with_k=9_test_0.dot
+    Generating tests:
+       Generation error message: Missing path: 0~>1~>2~>5~>1~>2~>3~>4~>1~>6 -> constraint -> unable to solve X>=2 & !Y>=2 & X_0=X-1 & X_0>=2 & Y>=2 & Y_0=Y-1 & X_1=X_0-1 & !X_1>=2 for path 0~>1~>2~>5~>1~>2~>3~>4~>1~>6
+       Generated state set: {(X -> 2, Y -> -100), (X -> 2, Y -> 2), (X -> 3, Y -> 2), (X -> -100), (X -> 3, Y -> -100)}
+         Coverage test: paths {0~>1~>2~>5~>1~>2~>3~>4~>1~>6} not traversed
+         Coverage rate: 83%
+```
+
+On se rend ici compte que le sous chemin `1~>2~>3~>4~>1` ne peut pas être exécuté après le sous chemin `1~>2~>5~>1` : en effet on ne peut plus modifier Y quand on est déja passé par `1~>2~>5~>1`, alors que le test inverse (`0~>1~>2~>3~>4~>1~>2~>5~>1~>6`) est possible. Il s'agit du résultat attendu. Notons que le générateur de test et le coverage renvoient la même information, mais que l'erreur du générateur est plus complexe. Notons également que le générateur de test renvoie le test set le plus complet possible, même s'il y a eu une erreur de génération.
+
+##### Graphes générés
+Test 0
+
+![ex2_test_0](./graphs/k_path_all_k_paths_with_k=9_test_0.png)
+
+#### Critère tous les usages
+
+Ici on cherche si tous les usages des variables sont bien utilisés
+
+##### Sortie du programme
+
+```
+Testing criterion `all usages`
+    Required coverage (from to): paths: {5~~>1, 4~~>4, 4~~>5, 3~~>3, 5~~>4, 3~~>2, 5~~>5, 4~~>1}
+    Testing on example state sets:
+       State set: {(X -> 2, Y -> -1), (X -> 2, Y -> 2), (X -> 3, Y -> 2), (X -> -1), (X -> 3, Y -> -1)
+         Coverage test: source target paths {4~~>4, 3~~>3, 5~~>4} not traversed
+         Coverage rate: 62%
+         Exported graph for test at ./graphs/k_path_all_usages_test_0.dot
+       State set: {(X -> 5, Y -> 2), (X -> 5, Y -> 1), (X -> 6, Y -> 6), (X -> 4, Y -> 4), (X -> 5, Y -> 5), (X -> 4, Y -> 3), (X -> 6, Y -> 2)
+         Coverage test: source target paths {5~~>4} not traversed
+         Coverage rate: 87%
+         Exported graph for test at ./graphs/k_path_all_usages_test_1.dot
+    Generating tests:
+       Generation error message: Missing variable: X -> Missing ref: 4 -> Missing def to ref: 5~~>4 -> Unable to find any def to ref path
+       Generated state set: {(X -> 5, Y -> 2), (X -> 5, Y -> -100), (X -> 6, Y -> 6), (X -> 4, Y -> 4), (X -> 5, Y -> 5), (X -> 4, Y -> 3), (X -> 6, Y -> 2)}
+         Coverage test: source target paths {5~~>4} not traversed
+         Coverage rate: 87%
+```
+
+##### Graphes générés
+Test 0 | Test 1
+:-------------------------:|:-------------------------:
+![ex1_test_0](./graphs/k_path_all_usages_test_0.png)|![ex1_test_1](./graphs/k_path_all_usages_test_1.png)
+
+Notons sur le deuxième usage (généré par l'outil) que le seul usage non utilisé est celui où la variable X est définie en 5 et utilisée en 4 : ce qui traduit exactement la même contrainte que celle exprimée par les k-path : le sous chemin `1~>2~>3~>4~>1` ne peut pas être exécuté après le sous chemin `1~>2~>5~>1`.
