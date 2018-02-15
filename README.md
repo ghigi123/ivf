@@ -611,7 +611,7 @@ Notons sur le deuxième usage (généré par l'outil) que le seul usage non util
 
 ### Exemple 4
 
-![ex4](./graphs/usage_vs_du_all.png)
+![ex4](./graphs/usage_vs_du.png)
 
 #### Comparaison tous les DU chemins vs tous les Usages
 Ces deux critères s'intéressent à la relation entre les couples définition-usage des variables.
