@@ -621,7 +621,7 @@ Tous les DU chemins demande le parcours de tous les chemins simples entre chaque
 #### Intérêt du programme
 Ce programme assigne 2 à `X` puis l'incrémente à 3.
 On rajoute une commande `if` qui ne fait rien d'effectif, mais dédouble le chemin entre la première assignation et son usage.
-L'assignation à ces chemins va dépendre de la positivité de la variable `Y`.
+L'assignation à ces chemins va dépendre de la positivité de la variable `Y` qui agit comme un commutateur.
 On a alors un unique couple assignation (`X := 2`), usage (`X := X + 1`), mais 2 chemins pour l'effectuer : `0~>1~>3~>4` et `0~>1~>2~>4`.
 
 **Tous les Usages** va nécessiter un passage quelconque de `0` à `4` et sera donc toujours valide.
