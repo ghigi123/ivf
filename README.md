@@ -415,12 +415,12 @@ Testing on example state sets:
      Coverage test: all required nodes traversed
      Coverage rate: 100%
      Exported graph for test at ./graphs/course_skip_all_decisions_test_0.dot
-   State set: {(X -> -1), (X -> 2)
+   State set: {(X -> 1), (X -> -2)
      Coverage test: nodes {4} not traversed
      Coverage rate: 75%
      Exported graph for test at ./graphs/course_skip_all_decisions_test_1.dot
 Generating tests:
-   Generated state set: {(X -> -100), (X -> 1)}
+   Generated state set: {(X -> -100), (X -> 1), (X -> -1)}
      Coverage test: all required nodes traversed
      Coverage rate: 100%
 ```
@@ -428,6 +428,33 @@ Generating tests:
 Test 0 | Test 1
 :-------------------------:|:-------------------------:
 ![ex2_test_0](./graphs/course_skip_all_decisions_test_0.png)|![ex2_test_1](./graphs/course_skip_all_decisions_test_1.png)
+
+#### Critère toutes les définitions
+
+Ici on vérifie que toutes les définitions de variables sont parcourues par les tests.
+
+##### Sortie du programme
+```
+Testing criterion `all definitions`
+Required coverage (from to any of): paths: {1~~>{3}, 2~~>{3}}
+Testing on example state sets:
+   State set: {(X -> 1), (X -> -1)
+     Coverage test: all sources to any target paths traversed
+     Coverage rate: 100%
+     Exported graph for test at ./graphs/course_skip_all_definitions_test_0.dot
+   State set: {(X -> 1), (X -> 2)
+     Coverage test: source to any target paths {1~~>{3}} not traversed
+     Coverage rate: 50%
+     Exported graph for test at ./graphs/course_skip_all_definitions_test_1.dot
+Generating tests:
+   Generated state set: {(X -> -100), (X -> 1)}
+     Coverage test: all sources to any target paths traversed
+     Coverage rate: 100%
+```
+##### Graphes générés
+Test 0 | Test 1
+:-------------------------:|:-------------------------:
+![ex2_test_0](./graphs/course_skip_all_definitions_test_0.png)|![ex2_test_1](./graphs/course_skip_all_definitions_test_1.png)
 
 
 
