@@ -372,6 +372,7 @@ Ici les assignations avec le label 7 (`Z := Y`) et 5 (`Y := 5`) ne sont pas atte
 5. [Toutes les définitions](#critère-toutes-les-définitions)
 6. [Toutes les utilisations](#critère-tous-les-usages)
 7. [Tous les DU chemins](#critère-tous-les-du-chemins)
+8. [Comparaison tous les DU chemins vs tous les Usages](#comparaison-tous-les-du-chemins-vs-tous-les-usages)
 
 
 ### Exemple 1
@@ -607,3 +608,32 @@ Test 0 | Test 1
 ![ex3_test_0](./graphs/k_path_all_usages_test_0.png)|![ex3_test_1](./graphs/k_path_all_usages_test_1.png)
 
 Notons sur le deuxième usage (généré par l'outil) que le seul usage non utilisé est celui où la variable X est définie en 5 et utilisée en 4 : ce qui traduit exactement la même contrainte que celle exprimée par les k-path : le sous chemin `1~>2~>3~>4~>1` ne peut pas être exécuté après le sous chemin `1~>2~>5~>1`.
+
+### Exemple 4
+
+![ex4](./graphs/usage_vs_du_all.png)
+
+#### Comparaison tous les DU chemins vs tous les Usages
+Ces deux critères s'intéressent à la relation entre les couples définition-usage des variables.
+Tous les usages demande le parcours d'au moins un chemin entre chaque couple.
+Tous les DU chemins demande le parcours de tous les chemins simples entre chaque couple.
+
+#### Intérêt du programme
+Ce programme assigne 2 à `X` puis l'incrémente à 3.
+On rajoute une commande `if` qui ne fait rien d'effectif, mais dédouble le chemin entre la première assignation et son usage.
+L'assignation à ces chemins va dépendre de la positivité de la variable `Y`.
+On a alors un unique couple assignation (`X := 2`), usage (`X := X + 1`), mais 2 chemins pour l'effectuer : `0~>1~>3~>4` et `0~>1~>2~>4`.
+
+**Tous les Usages** va nécessiter un passage quelconque de `0` à `4` et sera donc toujours valide.
+**Tous les DU chemins** va demander les 2 parcours de `0` à `4` et donc demander un set de tests qui propose les 2 chemins.
+
+##### Graphes générés
+All Usages 0 | All Usages 1
+:-------------------------:|:-------------------------:
+![ex4_test_usage_0](./graphs/usage_vs_du_all_usages_test_0.png)|![ex4_test_usage_1](./graphs/usage_vs_du_all_usages_test_1.png)
+
+All DU 0 | All DU 1 | All DU 3
+:-------------------------:|:-------------------------:|:-------------------------:
+![ex4_test_du_0](./graphs/usage_vs_du_all_du_paths_test_0.png)|![ex4_test_du_1](./graphs/usage_vs_du_all_du_paths_test_1.png)|![ex4_test_du_2](./graphs/usage_vs_du_all_du_paths_test_2.png)
+
+
