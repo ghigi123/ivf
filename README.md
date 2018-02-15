@@ -364,6 +364,15 @@ Graphe d'exemple             |  Test 'toutes les assignations'
 Ici les assignations avec le label 7 (`Z := Y`) et 5 (`Y := 5`) ne sont pas atteignables avec comme valuations testées `(X->1, Y->2)` et `(Z->-1)`
 
 ## 4. Applications et exemples
+### Table des critères
+1. [Toutes les affectations](#critère-toutes-les-assignations)
+2. [Toutes les décisions](#critère-toutes-les-décisions)
+3. [Tous les k-chemins](#critère-tous-les-k-chemins)
+4. [Toutes les i-boucles](#critère-toutes-les-i-boucles)
+5. [Toutes les définitions](#critère-toutes-les-définitions)
+6. [Toutes les utilisations](#critère-tous-les-usages)
+7. [Tous les DU chemins](#critère-tous-les-du-chemins)
+
 
 ### Exemple 1
 
