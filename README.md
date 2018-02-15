@@ -399,7 +399,7 @@ Test 0 | Test 1
 
 #### Critère tous les DU chemins
 
-Ici on cherche à vérifier le parcours de tous les chemins directs de définition à usage d'une variable.
+On cherche à vérifier le parcours de tous les chemins directs de définition à usage d'une variable.
 Chemin direct signifie qui parcourt les boucles au plus 1 fois et où la variable n'est pas redéfinie. 
 
 ##### Sortie du programme
@@ -425,14 +425,12 @@ Generating tests:
      Coverage test: all required paths traversed
      Coverage rate: 100%
 ```
-Sur ce programme, les DU paths sont les suivants : `1~>3~>5, 2~>3~>5, 1~>3, 2~>3`. (`4` est une assignation sans utilisation de X)
-Nous 
+Sur ce programme, les DU paths sont les suivants : `1~>3~>5, 2~>3~>5, 1~>3, 2~>3` (`4` est une assignation sans utilisation de X).
 
 ##### Graphes générés
 Test 0 | Test 1 | Test 2
 :-------------------------:|:-------------------------:|:-------------------------:
 ![ex1_test_0](./graphs/course_all_du_paths_test_0.png)|![ex1_test_1](./graphs/course_all_du_paths_test_1.png)|![ex1_test_2](./graphs/course_all_du_paths_test_2.png)
-
 
 
 ### Exemple 2
@@ -441,7 +439,7 @@ Test 0 | Test 1 | Test 2
 
 #### Critère toutes les décisions
 
-Ici on vérifie que toutes les décisions sont prises par les tests.
+On vérifie que toutes les décisions sont prises par les tests.
 Le choix de reprendre l'exemple course en remplaçant les assignations par des `skips` permet de mettre en avant la différence avec le critère `toutes les assignations`.
 
 ##### Sortie du programme
