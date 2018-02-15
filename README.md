@@ -397,6 +397,44 @@ Test 0 | Test 1
 :-------------------------:|:-------------------------:
 ![ex1_test_0](./graphs/course_all_assigns_test_0.png)|![ex1_test_1](./graphs/course_all_assigns_test_1.png)
 
+#### Critère tous les DU chemins
+
+Ici on cherche à vérifier le parcours de tous les chemins directs de définition à usage d'une variable.
+Chemin direct signifie qui parcourt les boucles au plus 1 fois et où la variable n'est pas redéfinie. 
+
+##### Sortie du programme
+
+```
+Testing criterion `all du paths`
+Required coverage (path): {1~>3~>5, 2~>3~>5, 1~>3, 2~>3}
+Testing on example state sets:
+   State set: {(X -> 1)
+     Coverage test: paths {1~>3~>5, 1~>3} not traversed
+     Coverage rate: 50%
+     Exported graph for test at ./graphs/course_all_du_paths_test_0.dot
+   State set: {(X -> -2)
+     Coverage test: paths {2~>3~>5, 2~>3} not traversed
+     Coverage rate: 50%
+     Exported graph for test at ./graphs/course_all_du_paths_test_1.dot
+   State set: {(X -> 1), (X -> -2)
+     Coverage test: all required paths traversed
+     Coverage rate: 100%
+     Exported graph for test at ./graphs/course_all_du_paths_test_2.dot
+Generating tests:
+   Generated state set: {(X -> -99), (X -> 1), (X -> -100)}
+     Coverage test: all required paths traversed
+     Coverage rate: 100%
+```
+Sur ce programme, les DU paths sont les suivants : `1~>3~>5, 2~>3~>5, 1~>3, 2~>3`. (`4` est une assignation sans utilisation de X)
+Nous 
+
+##### Graphes générés
+Test 0 | Test 1 | Test 2
+:-------------------------:|:-------------------------:|:-------------------------:
+![ex1_test_0](./graphs/course_all_du_paths_test_0.png)|![ex1_test_1](./graphs/course_all_du_paths_test_1.png)|![ex1_test_2](./graphs/course_all_du_paths_test_2.png)
+
+
+
 ### Exemple 2
 
 ![ex2](./graphs/course_skip.png)
