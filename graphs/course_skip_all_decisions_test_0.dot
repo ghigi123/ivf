@@ -1,0 +1,20 @@
+digraph course_skip_all_decisions_test_0 {
+	label = "(X -> 1), (X -> -1)
+coverage: 100%
+course_skip_all_decisions_test_0"
+	"3 if (X=1)" -> "4 skip" [label = true]
+	"4 skip" -> "6 _"
+	"2 skip" -> "3 if (X=1)"
+	"2 skip" [color = green, style = bold]
+	"0 if (X<=0)" -> "1 skip" [label = true]
+	"3 if (X=1)" [style = bold]
+	"6 _" [style = bold]
+	"5 skip" -> "6 _"
+	"3 if (X=1)" -> "5 skip" [label = false]
+	"5 skip" [color = green, style = bold]
+	"0 if (X<=0)" [style = bold]
+	"1 skip" [color = green, style = bold]
+	"4 skip" [color = green, style = bold]
+	"1 skip" -> "3 if (X=1)"
+	"0 if (X<=0)" -> "2 skip" [label = false]
+}

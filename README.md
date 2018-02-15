@@ -399,7 +399,41 @@ Test 0 | Test 1
 
 ### Exemple 2
 
-![ex2](./graphs/k_path.png)
+![ex2](./graphs/course_skip.png)
+
+#### Critère toutes les décisions
+
+Ici on vérifie que toutes les décisions sont prises par les tests.
+Le choix de reprendre l'exemple course en remplaçant les assignations par des `skips` permet de mettre en avant la différence avec le critère `toutes les assignations`.
+
+##### Sortie du programme
+```
+Testing criterion `all decisions`
+Required coverage (node): nodes : {1, 2, 4, 5}
+Testing on example state sets:
+   State set: {(X -> 1), (X -> -1)
+     Coverage test: all required nodes traversed
+     Coverage rate: 100%
+     Exported graph for test at ./graphs/course_skip_all_decisions_test_0.dot
+   State set: {(X -> -1), (X -> 2)
+     Coverage test: nodes {4} not traversed
+     Coverage rate: 75%
+     Exported graph for test at ./graphs/course_skip_all_decisions_test_1.dot
+Generating tests:
+   Generated state set: {(X -> -100), (X -> 1)}
+     Coverage test: all required nodes traversed
+     Coverage rate: 100%
+```
+##### Graphes générés
+Test 0 | Test 1
+:-------------------------:|:-------------------------:
+![ex2_test_0](./graphs/course_skip_all_decisions_test_0.png)|![ex2_test_1](./graphs/course_skip_all_decisions_test_1.png)
+
+
+
+### Exemple 3
+
+![ex3](./graphs/k_path.png)
 
 #### Critère tous les k-chemins
 
@@ -427,7 +461,7 @@ On se rend ici compte que le sous chemin `1~>2~>3~>4~>1` ne peut pas être exéc
 ##### Graphes générés
 Test 0
 
-![ex2_test_0](./graphs/k_path_all_k_paths_with_k=9_test_0.png)
+![ex3_test_0](./graphs/k_path_all_k_paths_with_k=9_test_0.png)
 
 #### Critère tous les usages
 
@@ -457,6 +491,6 @@ Testing criterion `all usages`
 ##### Graphes générés
 Test 0 | Test 1
 :-------------------------:|:-------------------------:
-![ex1_test_0](./graphs/k_path_all_usages_test_0.png)|![ex1_test_1](./graphs/k_path_all_usages_test_1.png)
+![ex3_test_0](./graphs/k_path_all_usages_test_0.png)|![ex3_test_1](./graphs/k_path_all_usages_test_1.png)
 
 Notons sur le deuxième usage (généré par l'outil) que le seul usage non utilisé est celui où la variable X est définie en 5 et utilisée en 4 : ce qui traduit exactement la même contrainte que celle exprimée par les k-path : le sous chemin `1~>2~>3~>4~>1` ne peut pas être exécuté après le sous chemin `1~>2~>5~>1`.

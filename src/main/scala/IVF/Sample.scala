@@ -137,6 +137,30 @@ object Sample {
           ),
           Assign(Variable("Z"), Variable("Y")),
         ))
+      ),
+      SampleAST(
+        "course_skip",
+        Sequence(List(
+          If(
+            Comparator(LessEqual, Variable("X"), AValue(0)),
+            Skip(),
+            Skip()
+          ),
+          If(
+            Comparator(Equal, Variable("X"), AValue(1)),
+            Skip(),
+            Skip()
+          ),
+        )),
+        List(
+          SampleTest(
+            AllDecisionsCriterion(),
+            List(
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -1))),
+              List[State](State(Map("X" -> -1)), State(Map("X" -> 2)))
+            )
+          )
+        )
       )
     )
       .map(s => s.name -> s).toMap
