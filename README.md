@@ -463,6 +463,47 @@ Test 0
 
 ![ex3_test_0](./graphs/k_path_all_k_paths_with_k=9_test_0.png)
 
+#### Critère toutes les i-boucles
+
+Ici on cherche à savoir si tous les chemins de boucles `while` de taille i ( = 1) sont parcourus.
+
+##### Sortie du programme
+
+```
+Testing criterion `all i loops with i=1`
+    Required coverage (path): {0~>1~>6, 0~>1~>2~>3~>4~>1~>6, 0~>1~>2~>5~>1~>6}
+    Testing on example state sets:
+       State set: {(X -> 1, Y -> 2)
+         Coverage test: paths {0~>1~>2~>3~>4~>1~>6, 0~>1~>2~>5~>1~>6} not traversed
+         Coverage rate: 33%
+         Exported graph for test at ./graphs/k_path_all_i_loops_with_i=1_test_0.dot
+       State set: {(X -> 2, Y -> 2)
+         Coverage test: paths {0~>1~>6, 0~>1~>2~>5~>1~>6} not traversed
+         Coverage rate: 33%
+         Exported graph for test at ./graphs/k_path_all_i_loops_with_i=1_test_1.dot
+       State set: {(X -> 2, Y -> 2), (X -> 2, Y -> 1)
+         Coverage test: paths {0~>1~>6} not traversed
+         Coverage rate: 66%
+         Exported graph for test at ./graphs/k_path_all_i_loops_with_i=1_test_2.dot
+       State set: {(X -> 3, Y -> 2)
+         Coverage test: paths {0~>1~>6, 0~>1~>2~>3~>4~>1~>6, 0~>1~>2~>5~>1~>6} not traversed
+         Coverage rate: 0%
+         Exported graph for test at ./graphs/k_path_all_i_loops_with_i=1_test_3.dot
+    Generating tests:
+       Generated state set: {(X -> -100), (X -> 2, Y -> 2), (X -> 2, Y -> -100)}
+         Coverage test: all required paths traversed
+         Coverage rate: 100%
+```
+Le test 0 passe par la boucle 0 fois tandis que le test 3 passe par la boucle 2 fois.
+Dans le test 1 nous passons bien par la boucle i = 1 fois, cependant la partie avec le if = false n'est pas couverte.
+On rajoute donc un 2e state dans le test 2 pour tout couvrir.
+
+##### Graphes générés
+Test 0 | Test 1 | Test 2 | Test 3
+:-------------------------:|:-------------------------:|:-------------------------:|:-------------------------:|
+![ex3_test_0](./graphs/k_path_all_i_loops_with_i=1_test_0.png)|![ex3_test_1](./graphs/k_path_all_i_loops_with_i=1_test_1.png)|![ex3_test_2](./graphs/k_path_all_i_loops_with_i=1_test_2.png)|![ex3_test_3](./graphs/k_path_all_i_loops_with_i=1_test_3.png)
+
+
 #### Critère tous les usages
 
 Ici on cherche si tous les usages des variables sont bien utilisés

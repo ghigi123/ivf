@@ -124,6 +124,15 @@ object Sample {
             List(
               List(State(Map("X" -> 3, "Y" -> 3)))
             )
+          ),
+          SampleTest(
+            AllILoopsCriterion(1),
+            List(
+              List(State(Map("X" -> 1, "Y" -> 2))),
+              List(State(Map("X" -> 2, "Y" -> 2))),
+              List(State(Map("X" -> 2, "Y" -> 2)), State(Map("X" -> 2, "Y" -> 1))),
+              List(State(Map("X" -> 3, "Y" -> 2))),
+            )
           )
         )
       ),

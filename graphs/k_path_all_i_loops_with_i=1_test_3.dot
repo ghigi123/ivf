@@ -1,0 +1,20 @@
+digraph "k_path_all_i_loops_with_i=1_test_3" {
+	label = "(X -> 3, Y -> 2)
+coverage: 0%
+k_path_all_i_loops_with_i=1_test_3"
+	"1 while (X>=2)" -> "6 _" [label = false, color = red]
+	"4 X := X-1" [style = bold]
+	"3 Y := Y-1" [style = bold]
+	"5 X := X-1" [style = bold]
+	"2 if (Y>=2)" [style = bold]
+	"2 if (Y>=2)" -> "5 X := X-1" [label = false, color = red]
+	"6 _" [style = bold]
+	"1 while (X>=2)" [style = bold]
+	"0 skip" [style = bold]
+	"2 if (Y>=2)" -> "3 Y := Y-1" [label = true, color = red]
+	"3 Y := Y-1" -> "4 X := X-1" [color = red]
+	"1 while (X>=2)" -> "2 if (Y>=2)" [label = true, color = red]
+	"0 skip" -> "1 while (X>=2)" [color = red]
+	"4 X := X-1" -> "1 while (X>=2)" [color = red]
+	"5 X := X-1" -> "1 while (X>=2)" [color = red]
+}
