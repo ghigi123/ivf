@@ -152,8 +152,8 @@ object Sample {
         Sequence(List(
           If(
             Comparator(LessEqual, Variable("X"), AValue(0)),
-            Skip(),
-            Skip()
+            Assign(Variable("X"), AUnary(Sub, Variable("X"))),
+            Assign(Variable("X"), ABinary(Sub, AValue(1), Variable("X")))
           ),
           If(
             Comparator(Equal, Variable("X"), AValue(1)),
@@ -166,7 +166,14 @@ object Sample {
             AllDecisionsCriterion(),
             List(
               List[State](State(Map("X" -> 1)), State(Map("X" -> -1))),
-              List[State](State(Map("X" -> -1)), State(Map("X" -> 2)))
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -2)))
+            )
+          ),
+          SampleTest(
+            AllDefinitionsCriterion(),
+            List(
+              List[State](State(Map("X" -> 1)), State(Map("X" -> -1))),
+              List[State](State(Map("X" -> 1)), State(Map("X" -> 2)))
             )
           )
         )
