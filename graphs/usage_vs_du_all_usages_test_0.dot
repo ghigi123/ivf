@@ -1,6 +1,7 @@
-digraph usage_vs_du {
-	label = "
-usage_vs_du"
+digraph usage_vs_du_all_usages_test_0 {
+	label = "(Y -> 1)
+coverage: 100%
+usage_vs_du_all_usages_test_0"
 	"2 skip" [style = bold]
 	"0 X := 2" -> "1 if (Y>=0)"
 	"1 if (Y>=0)" -> "2 skip" [label = true]

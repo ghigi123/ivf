@@ -137,15 +137,33 @@ object Sample {
         )
       ),
       SampleAST(
-        "usage_vs_du", Sequence(List(
-          Assign(Variable("Y"), Variable("X")),
+        "usage_vs_du",
+        Sequence(List(
+          Assign(Variable("X"), AValue(2)),
           If(
-            BValue(false),
+            Comparator(GreaterEqual, Variable("Y"), AValue(0)),
             Skip(),
             Skip()
           ),
-          Assign(Variable("Z"), Variable("Y")),
-        ))
+          Assign(Variable("X"), ABinary(Plus, Variable("X"), AValue(1)))
+        )),
+        List(
+          SampleTest(
+            AllUsagesCriterion(),
+            List(
+              List(State(Map("Y" -> 1))),
+              List(State(Map("Y" -> -1)))
+            )
+          ),
+          SampleTest(
+            AllDUPathsCriterion(),
+            List(
+              List(State(Map("Y" -> 1))),
+              List(State(Map("Y" -> -1))),
+              List(State(Map("Y" -> -1)), State(Map("Y" -> 1)))
+            )
+          )
+        )
       ),
       SampleAST(
         "course_skip",
