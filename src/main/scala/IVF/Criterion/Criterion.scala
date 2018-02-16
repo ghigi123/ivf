@@ -44,6 +44,7 @@ case class AllAssignCriterion(maxLoopDepth: Int = 1) extends Criterion {
 
 /**
   * All decisions criterion
+  *
   * @param maxLoopDepth max loop execution during test generation
   */
 case class AllDecisionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
@@ -65,6 +66,7 @@ case class AllDecisionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
 
 /**
   * All k-paths criterion
+  *
   * @param k k
   */
 case class AllKPathCriterion(k: Int) extends Criterion {
@@ -91,6 +93,7 @@ case class AllKPathCriterion(k: Int) extends Criterion {
 
 /**
   * All i-loops criterion
+  *
   * @param i i
   */
 case class AllILoopsCriterion(i: Int) extends Criterion {
@@ -109,6 +112,7 @@ case class AllILoopsCriterion(i: Int) extends Criterion {
 
 /**
   * All definitions criterion
+  *
   * @param maxLoopDepth max loop execution during test generation
   */
 case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
@@ -117,7 +121,6 @@ case class AllDefinitionsCriterion(maxLoopDepth: Int = 1) extends Criterion {
   override def build(cfg: CFG): (TestGenerator, SourceAnyTargetCoverage) = {
     // here we get the paths from a definition to its usages
     val pathsChunks: Map[Int, Set[Vector[Int]]] = cfg.labels
-      .filterKeys(cfg.isAssign)
       .collect {
         case (label: Int, AST.Assign(tVariable, _)) =>
           label -> Criterion.firstRefFromDefPaths(cfg, label, tVariable, maxLoopDepth)
@@ -326,12 +329,9 @@ object Criterion {
     // we will return the result organized by variable
     val variables =
       cfg.labels.values
-        .filter {
-          case AST.Assign(_, _) => true
-          case _ => false
-        }.collect {
-        case AST.Assign(a, _) => a
-      }
+        .collect {
+          case AST.Assign(a, _) => a
+        }
         .toSet
 
     // each variable will actually be associated a reference list

@@ -24,46 +24,27 @@ package object IVF {
       case _ => false
     }.collect {
       case Node(a) => Node(a)
-    } ++ redCoverageUnits.filter {
-      case SourceTargets(Some(_), _) => true
-      case _ => false
-    }.collect {
-      case SourceTargets(source, _) => Node(source.get)
+    } ++ redCoverageUnits.collect {
+      case SourceTargets(Some(source), _) => Node(source)
     }
 
-    val greenNodes = greenCoverageUnits.filter {
-      case Node(_) => true
-      case _ => false
-    }.collect {
+    val greenNodes = greenCoverageUnits.collect {
       case Node(a) => Node(a)
     }
 
-    val redEdges = redCoverageUnits.filter {
-      case Path(_) => true
-      case _ => false
-    }.collect {
+    val redEdges = redCoverageUnits.collect {
       case Path(a) => a.sliding(2).toVector
     }.flatten
 
-    val greenEdges = greenCoverageUnits.filter {
-      case Path(_) => true
-      case _ => false
-    }.collect {
+    val greenEdges = greenCoverageUnits.collect {
       case Path(a) => a.sliding(2).toVector
     }.flatten
 
-    val redSourceTarget = redCoverageUnits.filter {
-      case SourceTarget(_, _) => true
-      case _ => false
-    }.collect {
+    val redSourceTarget = redCoverageUnits.collect {
       case a@SourceTarget(_, _) => a
     }
 
     val newEdges = redSourceTarget
-      .filter {
-        case SourceTarget(Some(_), Some(_)) => true
-        case _ => false
-      }
       .collect {
         case SourceTarget(Some(source), Some(target)) => LDiEdge(source, target)("usage")
       }.toList
